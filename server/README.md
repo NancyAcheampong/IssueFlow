@@ -1,14 +1,16 @@
 # IssueFlow API
 
 Node.js + Express + TypeScript REST API and WebSocket gateway for IssueFlow,
-backed by PostgreSQL via Prisma.
+backed by PostgreSQL. Phase 0 talks to Postgres directly through `pg`;
+Prisma takes over as the query layer once real tables exist, starting
+Phase 1 (see "Database migrations" below).
 
 ## Architecture at a glance
 
 ```
 src/
   config/     Environment loading & validation (fails fast on bad config)
-  lib/        Shared singletons: Prisma client, logger, AppError
+  lib/        Shared singletons: Postgres pool (pg), logger, AppError
   middleware/ Cross-cutting Express middleware (error handling, later: auth)
   modules/    One folder per feature area (health, and later: auth, projects,
               issues, comments, labels, board, search), each owning its own
@@ -51,6 +53,32 @@ curl http://localhost:4000/health          # liveness — process is up
 curl http://localhost:4000/api/v1/status   # readiness — process AND database are up
 ```
 
+## Troubleshooting
+
+A few real gotchas hit during development, worth knowing before you hit them too:
+
+- **`Invalid environment configuration` on startup.** `.env` is
+  `.gitignore`d on purpose (it holds secrets) — a fresh clone, or a
+  `git reset --hard`, never brings it back. Redo step 3 above
+  (`cp .env.example .env`, then set a real `JWT_SECRET`).
+- **Editor shows a TypeScript error that the terminal doesn't.** VS
+  Code's TS server caches diagnostics and doesn't always notice
+  `npm install` finishing or files changing on disk. Try
+  `Cmd/Ctrl+Shift+P` → "Developer: Reload Window" first. If errors
+  about a *specific package* ("Cannot find module 'x'") persist after
+  that, confirm dependencies are actually installed — see the next point.
+- **`npx tsc` offers to install a package called `tsc@x.x.x`.** That's
+  not the real TypeScript compiler — it means npm can't find
+  `typescript` installed locally, almost always because `npm install`
+  was run from the repo root instead of from inside `server/`. Cancel
+  it, `cd server`, confirm `node_modules/` actually exists here
+  (`ls`), and re-run `npm install` if it doesn't.
+- **A dependency install command run from the wrong folder.** Always
+  run `npm install`/`npm install <pkg>` from *inside* `server/`, never
+  from the repo root — there's no Node project at the root, and
+  running it there creates a stray, unwanted `package.json` there
+  instead.
+
 ## Environment variables
 
 See `.env.example` for the full list with comments. Summary:
@@ -70,6 +98,12 @@ See `.env.example` for the full list with comments. Summary:
 npm test          # run once
 npm run test:watch
 ```
+
+Current coverage:
+- `tests/health.test.ts` — liveness endpoint, and the 404 error envelope
+- `tests/errorHandler.test.ts` — unit tests for `errorHandler`/`notFoundHandler`
+  directly (AppError formatting, ZodError formatting, the generic 500
+  fallback), since nothing in Phase 0 throws these through a real route yet
 
 ## Database migrations
 
