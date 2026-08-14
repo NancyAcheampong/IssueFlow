@@ -1,16 +1,17 @@
 # IssueFlow API
 
 Node.js + Express + TypeScript REST API and WebSocket gateway for IssueFlow,
-backed by PostgreSQL. Phase 0 talks to Postgres directly through `pg`;
-Prisma takes over as the query layer once real tables exist, starting
-Phase 1 (see "Database migrations" below).
+backed by PostgreSQL. Domain data (users, projects, issues, ...) goes
+through Prisma; a separate lightweight `pg` pool exists only for the
+liveness/readiness check (see "Database migrations" below).
 
 ## Architecture at a glance
 
 ```
 src/
   config/     Environment loading & validation (fails fast on bad config)
-  lib/        Shared singletons: Postgres pool (pg), logger, AppError
+  lib/        Shared singletons: Prisma client, Postgres pool (pg,
+              readiness check only), logger, AppError
   middleware/ Cross-cutting Express middleware (error handling, later: auth)
   modules/    One folder per feature area (health, and later: auth, projects,
               issues, comments, labels, board, search), each owning its own
@@ -78,6 +79,10 @@ A few real gotchas hit during development, worth knowing before you hit them too
   from the repo root — there's no Node project at the root, and
   running it there creates a stray, unwanted `package.json` there
   instead.
+- **`prisma migrate dev` fails with `P3014` / "permission denied to
+  create database".** The local Postgres role needs `CREATEDB` to
+  create its temporary shadow database — see "Database migrations"
+  below for the one-time fix.
 
 ## Environment variables
 
@@ -103,19 +108,44 @@ Current coverage:
 - `tests/health.test.ts` — liveness endpoint, and the 404 error envelope
 - `tests/errorHandler.test.ts` — unit tests for `errorHandler`/`notFoundHandler`
   directly (AppError formatting, ZodError formatting, the generic 500
-  fallback), since nothing in Phase 0 throws these through a real route yet
+  fallback), since nothing yet throws these through a real route
+- `tests/user.test.ts` — integration test against a real database (see
+  "Test database" below): creates/reads a `User` and proves the unique
+  email constraint from the migration is actually enforced
 
 ## Database migrations
 
-`prisma/schema.prisma` currently has no models — Phase 0 only proves the
-server can reach Postgres (see `/api/v1/status` above), using `pg` directly.
-Once real models exist starting Phase 1:
+Schema lives in `prisma/schema.prisma`. Every change to it goes through a
+migration — never edit tables by hand — so the schema is reproducible on
+any machine (NFR-08).
 
 ```bash
-npm run prisma:migrate   # create + apply a migration locally
-npm run prisma:deploy    # apply existing migrations (used in production)
+npm run prisma:migrate   # create + apply a migration locally, from a schema change
+npm run prisma:deploy    # apply existing migrations without generating a new one (used in production)
 npm run prisma:studio    # browse the database with a GUI
 ```
+
+`prisma:migrate` needs the local Postgres role to have `CREATEDB`
+privilege (it creates a temporary "shadow" database to compute the
+diff) — a one-time local setup step:
+
+```sql
+ALTER ROLE issueflow CREATEDB;
+```
+
+### Test database
+
+Tests that touch Prisma (e.g. `tests/user.test.ts`) run against a
+**separate** database, `issueflow_test`, kept isolated from your `issueflow`
+dev data (`tests/setup.ts` points `DATABASE_URL` there by default). Create
+it once and apply the same migrations:
+
+```bash
+psql -U issueflow -h localhost -c "CREATE DATABASE issueflow_test OWNER issueflow;"
+DATABASE_URL="postgresql://issueflow:issueflow@localhost:5432/issueflow_test?schema=public" npm run prisma:deploy
+```
+
+Re-run that `prisma:deploy` line any time a new migration is added.
 
 ## Linting & formatting
 

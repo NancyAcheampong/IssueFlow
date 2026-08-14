@@ -1,9 +1,7 @@
 // IssueFlow database schema.
 //
-// Phase 0: only the datasource/generator exist, so we can prove the
-// server can reach Postgres end to end. Real tables (User, Project,
-// Issue, etc.) get added in Phase 1/2 per the domain model in the
-// product spec (Appendix A).
+// Phase 1: first real table. Domain model per the product spec,
+// Appendix A. More tables (Project, Issue, etc.) arrive in Phase 2+.
 
 generator client {
   provider = "prisma-client-js"
@@ -12,4 +10,23 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+// AUTH-01/AUTH-03: a registered, authenticated person. The password is
+// never stored in plain text (passwordHash only) and this model should
+// never be serialized straight to JSON in an API response - always pick
+// only the fields that are safe to expose (see AppError/response shaping
+// once the signup/login routes exist).
+model User {
+  id           String   @id @default(cuid())
+  // Normalized (lowercased, trimmed) before it ever reaches this column -
+  // that normalization is application logic, not something Postgres does
+  // for us. @unique enforces the "unique" half of "unique normalized email".
+  email        String   @unique
+  displayName  String   @map("display_name")
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
 }
