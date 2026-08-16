@@ -83,6 +83,18 @@ A few real gotchas hit during development, worth knowing before you hit them too
   create database".** The local Postgres role needs `CREATEDB` to
   create its temporary shadow database — see "Database migrations"
   below for the one-time fix.
+- **`PrismaClientInitializationError: Can't reach database server at
+  localhost:5432`.** Different from every error above — this one
+  means the Prisma Client itself is fine, it's Postgres that isn't
+  running. Start it (`docker compose -f ../docker-compose.yml up -d`,
+  or `pg_lsclusters` / `sudo service postgresql start` if using a
+  local install instead of Docker) and re-run.
+- **`Cannot find module '.prisma/client'` / prisma-related errors
+  right after cloning or pulling.** The generated Prisma Client lives
+  in `node_modules`, which is gitignored — it never comes from git,
+  only from running `npm install` (a `postinstall` script regenerates
+  it automatically). If it's ever out of sync for some reason, force
+  it manually: `npm run prisma:generate`.
 
 ## Environment variables
 
