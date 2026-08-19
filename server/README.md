@@ -11,11 +11,12 @@ liveness/readiness check (see "Database migrations" below).
 src/
   config/     Environment loading & validation (fails fast on bad config)
   lib/        Shared singletons: Prisma client, Postgres pool (pg,
-              readiness check only), logger, AppError
-  middleware/ Cross-cutting Express middleware (error handling, later: auth)
-  modules/    One folder per feature area (health, and later: auth, projects,
-              issues, comments, labels, board, search), each owning its own
-              routes/controller/service files as we build them
+              readiness check only), logger, AppError, asyncHandler
+  middleware/ Cross-cutting Express middleware (error handling, later: auth
+              guard for protected routes)
+  modules/    One folder per feature area (health, auth, and later:
+              projects, issues, comments, labels, board, search), each
+              owning its own routes/service/schema files
   app.ts      Express app assembly (middleware stack + route mounting) —
               exported as a factory so tests can build a fresh app per test
   index.ts    Process entry point: starts the HTTP server, handles graceful
@@ -27,6 +28,16 @@ Error responses always use one envelope shape (spec API-03):
 ```json
 { "error": { "code": "VALIDATION_ERROR", "message": "...", "fields": { "email": "..." } } }
 ```
+
+## API routes implemented so far
+
+| Method | Path | Access | Notes |
+|---|---|---|---|
+| GET | `/health` | Public | Liveness only, no dependencies checked |
+| GET | `/api/v1/status` | Public | Readiness — also checks the database |
+| POST | `/api/v1/auth/signup` | Public | AUTH-01. Does **not** issue a JWT — signup and login are deliberately separate steps; call login next. |
+
+Full reference contract lives in the product spec, §8.
 
 ## Local setup
 
@@ -124,6 +135,11 @@ Current coverage:
 - `tests/user.test.ts` — integration test against a real database (see
   "Test database" below): creates/reads a `User` and proves the unique
   email constraint from the migration is actually enforced
+- `tests/auth.test.ts` — full signup flow through the real HTTP app:
+  password is actually bcrypt-hashed (and verifies against the original),
+  never returned in the response, email gets normalized, duplicates are
+  rejected with 409, and each invalid-input case returns the right
+  field-level validation error
 
 ## Database migrations
 

@@ -5,6 +5,7 @@ import { pinoHttp } from "pino-http";
 import { logger } from "./lib/logger.js";
 import { allowedOrigins } from "./config/env.js";
 import { livenessRouter, readinessRouter } from "./modules/health/health.routes.js";
+import { authRouter } from "./modules/auth/auth.routes.js";
 import { notFoundHandler, errorHandler } from "./middleware/errorHandler.js";
 
 export function createApp(): Express {
@@ -32,9 +33,10 @@ export function createApp(): Express {
 
   app.use(livenessRouter);
   app.use("/api/v1", readinessRouter);
+  app.use("/api/v1/auth", authRouter);
 
-  // Future routers (auth, projects, issues, ...) get mounted here in
-  // later phases, all under /api/v1.
+  // Future routers (projects, issues, ...) get mounted here in later
+  // phases, all under /api/v1.
 
   app.use(notFoundHandler);
   app.use(errorHandler);
