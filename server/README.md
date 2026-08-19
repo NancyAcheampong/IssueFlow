@@ -36,6 +36,7 @@ Error responses always use one envelope shape (spec API-03):
 | GET | `/health` | Public | Liveness only, no dependencies checked |
 | GET | `/api/v1/status` | Public | Readiness — also checks the database |
 | POST | `/api/v1/auth/signup` | Public | AUTH-01. Does **not** issue a JWT — signup and login are deliberately separate steps; call login next. |
+| POST | `/api/v1/auth/login` | Public | AUTH-02. Verifies credentials, returns `{ user, token }`. Wrong password and unknown email return the identical error (AUTH-07 — no account enumeration). |
 
 Full reference contract lives in the product spec, §8.
 
@@ -135,11 +136,12 @@ Current coverage:
 - `tests/user.test.ts` — integration test against a real database (see
   "Test database" below): creates/reads a `User` and proves the unique
   email constraint from the migration is actually enforced
-- `tests/auth.test.ts` — full signup flow through the real HTTP app:
-  password is actually bcrypt-hashed (and verifies against the original),
-  never returned in the response, email gets normalized, duplicates are
-  rejected with 409, and each invalid-input case returns the right
-  field-level validation error
+- `tests/auth.test.ts` — full signup and login flow through the real HTTP
+  app: password is actually bcrypt-hashed (and verifies against the
+  original), never returned in any response, email gets normalized,
+  duplicate signups are rejected with 409, a real JWT comes back on login
+  and decodes to the right user, and wrong-password vs. unknown-email
+  produce the exact same error (no account enumeration)
 
 ## Database migrations
 

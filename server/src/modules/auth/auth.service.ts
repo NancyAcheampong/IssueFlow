@@ -4,6 +4,8 @@ import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../lib/AppError.js";
 import type { SignupInput } from "./auth.schemas.js";
 
+const INVALID_CREDENTIALS_MESSAGE = "Invalid email or password.";
+
 // Cost factor for bcrypt. 10 is bcrypt's own historical default; 12 is a
 // stronger, still-fast-enough-for-a-login-request modern baseline. Higher
 // = slower to brute-force but also slower per real signup/login, so this
@@ -49,4 +51,24 @@ export async function createUser(input: SignupInput): Promise<SafeUser> {
     }
     throw err;
   }
+}
+
+export async function verifyCredentials(email: string, password: string): Promise<SafeUser> {
+  const user = await prisma.user.findUnique({ where: { email } });
+
+  // AUTH-07: "no account with that email" and "wrong password" get the
+  // exact same error - same code, same message. If they differed, this
+  // endpoint would let anyone check which emails have accounts on
+  // IssueFlow just by watching which error comes back, one guess at a
+  // time. Login failure is intentionally uninformative.
+  if (!user) {
+    throw AppError.unauthorized(INVALID_CREDENTIALS_MESSAGE);
+  }
+
+  const passwordMatches = await bcrypt.compare(password, user.passwordHash);
+  if (!passwordMatches) {
+    throw AppError.unauthorized(INVALID_CREDENTIALS_MESSAGE);
+  }
+
+  return toSafeUser(user);
 }
