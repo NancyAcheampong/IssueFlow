@@ -177,6 +177,17 @@ DATABASE_URL="postgresql://issueflow:issueflow@localhost:5432/issueflow_test?sch
 
 Re-run that `prisma:deploy` line any time a new migration is added.
 
+**Using a hosted database instead (e.g. Neon)** — if local Postgres setup
+is more trouble than it's worth (multiple Postgres installs fighting over
+port 5432 is a common one), copy `.env.test.example` to `.env.test` and
+set `DATABASE_URL` there to a *separate* database/branch on your hosted
+provider. `tests/setup.ts` loads it automatically if present, and falls
+back to the local default above if not — nothing else changes. Two
+things specific to Neon: connection strings need `?sslmode=require`, and
+migrations (`prisma:deploy`/`prisma:migrate`) should run against Neon's
+**direct** (non-pooled) connection string, not the pooled one — Prisma's
+migration engine doesn't work reliably through a connection pooler.
+
 ## Linting & formatting
 
 ```bash

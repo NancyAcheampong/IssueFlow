@@ -7,6 +7,7 @@ build/
 
 # Env files (never commit secrets)
 .env
+.env.test
 .env.local
 .env.*.local
 
