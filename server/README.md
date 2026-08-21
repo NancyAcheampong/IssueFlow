@@ -53,11 +53,22 @@ npm install
 
 # 3. Configure environment
 cp .env.example .env
-# edit .env if you changed any defaults
+# edit .env if you changed any defaults, and set a real JWT_SECRET
 
-# 4. Run the dev server (auto-restarts on change)
+# 4. Set up both local databases (dev + test), safe to re-run any time
+npm run setup:db
+
+# 5. Run the dev server (auto-restarts on change)
 npm run dev
 ```
+
+`setup:db` runs `scripts/setup-local-db.sh` — creates the `issueflow` and
+`issueflow_test` databases if they don't exist, fixes schema permissions
+(a real Postgres 15+ gotcha - see Troubleshooting), applies migrations to
+both, and fails fast with a clear message on the exact step that broke,
+instead of a confusing error three commands later. Idempotent: run it
+again any time something seems off with your local database and it'll
+just confirm what's already correct.
 
 Verify it's working:
 
@@ -107,6 +118,17 @@ A few real gotchas hit during development, worth knowing before you hit them too
   only from running `npm install` (a `postinstall` script regenerates
   it automatically). If it's ever out of sync for some reason, force
   it manually: `npm run prisma:generate`.
+- **A database that worked a minute ago now says "does not exist,"
+  or a permission error you already fixed comes back.** If you have
+  more than one thing capable of running Postgres (Homebrew's
+  `postgresql` service, Postgres.app, Docker/`docker-compose.yml` all
+  bind the same default port), whichever one happens to be running
+  "wins" the connection at `localhost:5432` — silently, with no
+  indication anything switched. Two databases with the same name on
+  two different servers is a real trap. `npm run setup:db` recovers
+  from this by re-checking/re-creating everything idempotently, but
+  if it keeps recurring, figure out which single Postgres you actually
+  want and stop the others.
 
 ## Environment variables
 
@@ -167,26 +189,25 @@ ALTER ROLE issueflow CREATEDB;
 
 Tests that touch Prisma (e.g. `tests/user.test.ts`) run against a
 **separate** database, `issueflow_test`, kept isolated from your `issueflow`
-dev data (`tests/setup.ts` points `DATABASE_URL` there by default). Create
-it once and apply the same migrations:
+dev data (`tests/setup.ts` points `DATABASE_URL` there by default).
 
-```bash
-psql -U issueflow -h localhost -c "CREATE DATABASE issueflow_test OWNER issueflow;"
-DATABASE_URL="postgresql://issueflow:issueflow@localhost:5432/issueflow_test?schema=public" npm run prisma:deploy
-```
+`npm run setup:db` (see "Local setup" above) creates and migrates this
+alongside the dev database in one step — that's the normal path. Re-run
+it any time a new migration is added, or any time something about your
+local database setup seems off; it's idempotent and will just confirm
+whatever's already correct.
 
-Re-run that `prisma:deploy` line any time a new migration is added.
-
-**Using a hosted database instead (e.g. Neon)** — if local Postgres setup
-is more trouble than it's worth (multiple Postgres installs fighting over
-port 5432 is a common one), copy `.env.test.example` to `.env.test` and
-set `DATABASE_URL` there to a *separate* database/branch on your hosted
-provider. `tests/setup.ts` loads it automatically if present, and falls
-back to the local default above if not — nothing else changes. Two
-things specific to Neon: connection strings need `?sslmode=require`, and
-migrations (`prisma:deploy`/`prisma:migrate`) should run against Neon's
-**direct** (non-pooled) connection string, not the pooled one — Prisma's
-migration engine doesn't work reliably through a connection pooler.
+**Using a hosted database instead (e.g. Neon)** — if you'd rather not deal
+with local Postgres at all (multiple Postgres installs fighting over port
+5432 is a real, common failure mode - see Troubleshooting), copy
+`.env.test.example` to `.env.test` and set `DATABASE_URL` there to a
+*separate* database/branch on your hosted provider. `tests/setup.ts`
+loads it automatically if present, and falls back to the local default
+above if not — nothing else changes. Two things specific to Neon:
+connection strings need `?sslmode=require`, and migrations
+(`prisma:deploy`/`prisma:migrate`) should run against Neon's **direct**
+(non-pooled) connection string, not the pooled one — Prisma's migration
+engine doesn't work reliably through a connection pooler.
 
 ## Linting & formatting
 

@@ -19,7 +19,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "setup:db": "bash scripts/setup-local-db.sh"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",
