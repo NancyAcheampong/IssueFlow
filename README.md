@@ -17,5 +17,10 @@ client/   React + Vite frontend (added starting Phase 2)
 
 ## Status
 
-Currently in **Phase 0 — Foundation**. See `server/README.md` for how to run
-the API locally.
+**Phase 1 (Auth & Users) complete** — signup, login, JWT middleware, and a
+protected `GET /api/v1/me` all work end to end, verified live and by
+automated test. Next: Phase 2 (Projects & Issues).
+
+See `server/README.md` for how to run the API locally, and
+[`DECISIONS.md`](./DECISIONS.md) for the technical decisions made so far
+and why.
