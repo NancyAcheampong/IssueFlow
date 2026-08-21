@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../lib/AppError.js";
 import type { SignupInput } from "./auth.schemas.js";
+import { toSafeUser, type SafeUser } from "../users/users.service.js";
 
 const INVALID_CREDENTIALS_MESSAGE = "Invalid email or password.";
 
@@ -11,21 +12,6 @@ const INVALID_CREDENTIALS_MESSAGE = "Invalid email or password.";
 // = slower to brute-force but also slower per real signup/login, so this
 // is a deliberate tradeoff, not an arbitrary number.
 const BCRYPT_COST_FACTOR = 12;
-
-// AUTH-03: passwords are hashed before persistence and never returned by
-// any API. This is the "safe to send to a client" shape of a user - every
-// route that returns a user should go through this, never the raw Prisma
-// row, so passwordHash can never accidentally leak into a response.
-export interface SafeUser {
-  id: string;
-  email: string;
-  displayName: string;
-  createdAt: Date;
-}
-
-function toSafeUser(user: { id: string; email: string; displayName: string; createdAt: Date }): SafeUser {
-  return { id: user.id, email: user.email, displayName: user.displayName, createdAt: user.createdAt };
-}
 
 export async function createUser(input: SignupInput): Promise<SafeUser> {
   const passwordHash = await bcrypt.hash(input.password, BCRYPT_COST_FACTOR);

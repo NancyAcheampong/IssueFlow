@@ -11,12 +11,14 @@ liveness/readiness check (see "Database migrations" below).
 src/
   config/     Environment loading & validation (fails fast on bad config)
   lib/        Shared singletons: Prisma client, Postgres pool (pg,
-              readiness check only), logger, AppError, asyncHandler
-  middleware/ Cross-cutting Express middleware (error handling, later: auth
-              guard for protected routes)
-  modules/    One folder per feature area (health, auth, and later:
-              projects, issues, comments, labels, board, search), each
-              owning its own routes/service/schema files
+              readiness check only), logger, AppError, asyncHandler, jwt
+  middleware/ Cross-cutting Express middleware: error handling,
+              requireAuth (protects a route with a Bearer JWT)
+  modules/    One folder per feature area (health, auth, users, and
+              later: projects, issues, comments, labels, board, search),
+              each owning its own routes/service/schema files
+  types/      Ambient TypeScript declarations (Express Request
+              augmentation for req.userId)
   app.ts      Express app assembly (middleware stack + route mounting) —
               exported as a factory so tests can build a fresh app per test
   index.ts    Process entry point: starts the HTTP server, handles graceful
@@ -37,6 +39,7 @@ Error responses always use one envelope shape (spec API-03):
 | GET | `/api/v1/status` | Public | Readiness — also checks the database |
 | POST | `/api/v1/auth/signup` | Public | AUTH-01. Does **not** issue a JWT — signup and login are deliberately separate steps; call login next. |
 | POST | `/api/v1/auth/login` | Public | AUTH-02. Verifies credentials, returns `{ user, token }`. Wrong password and unknown email return the identical error (AUTH-07 — no account enumeration). |
+| GET | `/api/v1/me` | **Authenticated** | AUTH-04. First protected route — requires `Authorization: Bearer <token>`, via `requireAuth` middleware. |
 
 Full reference contract lives in the product spec, §8.
 
@@ -164,6 +167,13 @@ Current coverage:
   duplicate signups are rejected with 409, a real JWT comes back on login
   and decodes to the right user, and wrong-password vs. unknown-email
   produce the exact same error (no account enumeration)
+- `tests/requireAuth.test.ts` — unit tests for the auth middleware
+  directly: no header, wrong scheme, garbage token, expired token, and a
+  token signed with the wrong secret are all rejected; a valid token
+  attaches `req.userId` and lets the request through
+- `tests/me.test.ts` — `GET /api/v1/me` through the real HTTP app with a
+  genuine signup+login token: returns the right user with no
+  `passwordHash`, rejects a missing token and an invalid one
 
 ## Database migrations
 
