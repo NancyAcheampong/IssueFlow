@@ -85,6 +85,29 @@ dropped — AUTH-07 is P1 ("should"), and rate limiting is an
 infrastructure/hardening concern better done alongside the rest of
 Phase 7's security pass than bolted onto Phase 1 in isolation.
 
+## D-11 (local) — ProjectMembership as a composite-key join table
+
+**Decision:** `ProjectMembership` has no independent `id` column — the
+primary key is `(projectId, userId)` directly (`@@id`), not a separate
+id plus a unique index on the same two columns.
+
+**Why:** it's a pure join table connecting a user to a project; the pair
+*is* its identity, and nothing in the domain ever needs to reference "this
+membership row" independently of "this user's membership in this
+project." A composite key also makes the uniqueness guarantee stronger
+than a unique index would — it's structurally impossible to have two
+rows for the same pair, not just prevented by a checked constraint.
+Matches the spec's own field list for this entity too (no `id` listed).
+
+**Related, worth remembering:** `Project.ownerId` and a
+`ProjectMembership` row with `role: owner` record the same fact in two
+places on purpose (PRJ-01 requires the creator to become both owner
+*and* first member; `ownerId` exists for fast "who owns this" lookups
+without joining/filtering memberships). Nothing at the schema level
+keeps these in sync — the project-creation code path is responsible for
+writing both atomically. If that ever needs debugging, this is the
+first thing to check.
+
 ---
 
-_Last updated: end of Phase 1 (Aug 21, 2026)._
+_Last updated: Phase 2, Aug 22 (Project/ProjectMembership schema)._

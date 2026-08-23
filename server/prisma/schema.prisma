@@ -1,7 +1,8 @@
 // IssueFlow database schema.
 //
-// Phase 1: first real table. Domain model per the product spec,
-// Appendix A. More tables (Project, Issue, etc.) arrive in Phase 2+.
+// Phase 1: User. Phase 2: Project + ProjectMembership. Domain model per
+// the product spec, Appendix A. More tables (Issue, Label, Comment,
+// BoardPlacement) arrive later in Phase 2/3.
 
 generator client {
   provider = "prisma-client-js"
@@ -28,5 +29,66 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
+  ownedProjects Project[]           @relation("ProjectOwner")
+  memberships   ProjectMembership[]
+
   @@map("users")
+}
+
+// PRJ-01: a workspace containing issues and one board. `ownerId` is a
+// direct pointer to the owner for fast "who owns this" lookups, kept in
+// sync with the corresponding ProjectMembership row (role: owner) that
+// PRJ-01 requires the creator to also get - two places recording the
+// same fact on purpose, not duplication by accident. The application
+// layer (project creation) is what keeps them consistent; nothing at
+// the schema level enforces that automatically.
+model Project {
+  id          String  @id @default(cuid())
+  name        String
+  // PRJ-01: "required name and optional description".
+  description String?
+
+  ownerId String @map("owner_id")
+  owner   User   @relation("ProjectOwner", fields: [ownerId], references: [id])
+
+  memberships ProjectMembership[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("projects")
+}
+
+// owner/member per the spec's MVP authorization model (§4) - no custom
+// roles in Phase 1/2. Enum values map to lowercase in Postgres to match
+// the spec's own casing, while staying idiomatic (SCREAMING_CASE) on the
+// TypeScript side - same split as camelCase-in-code / snake_case-in-SQL
+// used throughout this schema.
+enum ProjectRole {
+  OWNER  @map("owner")
+  MEMBER @map("member")
+}
+
+// Pure join table connecting a User to a Project with a role. The pair
+// itself is the identity - no separate `id` column, `@@id` below makes
+// (projectId, userId) the primary key directly, which is a stronger
+// guarantee than a separate `id` plus a unique index on the same two
+// columns would be, and matches the spec's own field list for this
+// entity exactly (no `id` listed).
+model ProjectMembership {
+  projectId String      @map("project_id")
+  userId    String      @map("user_id")
+  role      ProjectRole
+  joinedAt  DateTime    @default(now()) @map("joined_at")
+
+  // Deleting a project or a user removes their membership rows with
+  // them - membership has no meaning independent of both sides existing.
+  // This is unrelated to comment/issue authorship preservation (a later
+  // phase's concern) - a membership row isn't an attributed record the
+  // way a comment is.
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@map("project_memberships")
 }
