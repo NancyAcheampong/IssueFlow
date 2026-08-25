@@ -40,6 +40,7 @@ Error responses always use one envelope shape (spec API-03):
 | POST | `/api/v1/auth/signup` | Public | AUTH-01. Does **not** issue a JWT — signup and login are deliberately separate steps; call login next. |
 | POST | `/api/v1/auth/login` | Public | AUTH-02. Verifies credentials, returns `{ user, token }`. Wrong password and unknown email return the identical error (AUTH-07 — no account enumeration). |
 | GET | `/api/v1/me` | **Authenticated** | AUTH-04. First protected route — requires `Authorization: Bearer <token>`, via `requireAuth` middleware. |
+| POST | `/api/v1/projects` | **Authenticated** | PRJ-01. Creator becomes owner + first member (two rows written atomically — see DECISIONS.md D-11). |
 
 Full reference contract lives in the product spec, §8.
 
@@ -174,6 +175,14 @@ Current coverage:
 - `tests/me.test.ts` — `GET /api/v1/me` through the real HTTP app with a
   genuine signup+login token: returns the right user with no
   `passwordHash`, rejects a missing token and an invalid one
+- `tests/project.test.ts` — Prisma-level: creates a project + owner
+  membership together, proves the composite key rejects a duplicate
+  membership, proves deleting a project cascades to its memberships
+- `tests/projects.test.ts` — `POST /api/v1/projects` through the real
+  HTTP app: creates the project *and* confirms a real `ProjectMembership`
+  row with `role: OWNER` exists for the creator (PRJ-01 end to end, not
+  just the response shape), requires auth, validates a missing name,
+  and confirms description is genuinely optional
 
 ## Database migrations
 
