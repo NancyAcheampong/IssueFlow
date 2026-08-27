@@ -52,8 +52,29 @@ browser-only app, but fights a future mobile client); refresh tokens now
 rotation, revocation, storage — deferred until Phase 1's simpler model
 actually proves insufficient).
 
-**Still open:** D-06 (403 vs. 404 for inaccessible project resources) —
-not yet relevant, no project-scoped routes exist until Phase 2.
+## D-06 — 403 vs. 404 for inaccessible project resources
+
+**Decision:** a requester with **no membership at all** in a project
+gets `404 Not Found` — identical whether the project genuinely doesn't
+exist or exists but isn't theirs. A requester who **is a member** but
+lacks the role for a specific action (e.g. a non-owner trying to add a
+member) gets `403 Forbidden`.
+
+**Why:** a non-member shouldn't be able to distinguish "that project ID
+was never real" from "that project is real but not yours" — either
+answer would leak information about which project IDs exist to someone
+with zero relationship to them. Once someone *is* a legitimate member,
+though, that concealment reasoning no longer applies — they already
+know the project exists, so a plain "you can't do that" (403) is more
+honest and more useful than pretending otherwise. First applied in
+`getProjectMembership`/`requireOwnerRole` (`src/modules/projects/projects.service.ts`);
+this same split is the policy for every project-scoped route going
+forward, not just membership.
+
+**Rejected:** 403 for both cases (simpler, but leaks existence to
+outsiders); 404 for both cases (hides existence uniformly, but then a
+legitimate member gets a confusing "not found" for an action they
+should understand as "not allowed").
 
 ## D-08 (local) — bcrypt cost factor
 
@@ -110,4 +131,4 @@ first thing to check.
 
 ---
 
-_Last updated: Phase 2, Aug 22 (Project/ProjectMembership schema)._
+_Last updated: Phase 2, Aug 26 (list/create projects, add member, D-06 resolved)._

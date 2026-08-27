@@ -7,3 +7,11 @@ export const createProjectSchema = z.object({
 });
 
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
+
+// PRJ-03: identify the account to add by email, same normalization as
+// signup/login so it matches whatever's actually stored.
+export const addMemberSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Enter a valid email address."),
+});
+
+export type AddMemberInput = z.infer<typeof addMemberSchema>;
