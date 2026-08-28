@@ -2,7 +2,7 @@ import { Prisma, type ProjectMembership } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../lib/AppError.js";
 import { toSafeUser, type SafeUser } from "../users/users.service.js";
-import type { CreateProjectInput } from "./projects.schemas.js";
+import type { CreateProjectInput, UpdateProjectInput } from "./projects.schemas.js";
 
 // PRJ-01: the creator becomes both the project's owner and its first
 // member. A single nested Prisma write - both inserts happen in one
@@ -89,4 +89,46 @@ export async function addMember(projectId: string, email: string): Promise<SafeU
   }
 
   return toSafeUser(user);
+}
+
+// PRJ-04: owner removes a member. Two rules beyond "delete the row":
+// the owner can't remove themselves (there's no ownership-transfer or
+// project-deletion feature yet, so that would strand the project with
+// no owner), and removing someone who isn't actually a member is a 404,
+// not a silent success.
+export async function removeMember(projectId: string, ownerId: string, targetUserId: string): Promise<void> {
+  if (targetUserId === ownerId) {
+    throw AppError.badRequest("The project owner can't remove themselves.");
+  }
+
+  const result = await prisma.projectMembership.deleteMany({
+    where: { projectId, userId: targetUserId },
+  });
+
+  if (result.count === 0) {
+    throw AppError.notFound("That user is not a member of this project.");
+  }
+
+  // PRJ-04: "the system safely handles any current assignment without
+  // deleting historical authorship." Nothing to do here yet - Issue
+  // (with its assigneeId) doesn't exist until later today's schema
+  // work. Once it does, removing a member needs to unassign their
+  // issues here rather than leave a dangling assigneeId; noting it now
+  // so it isn't forgotten when Issue lands.
+}
+
+// PRJ-05: owner-only edit of name/description. Only the fields actually
+// present in the input get written - `undefined` means "leave alone,"
+// an explicit empty string means "clear it" (stored as null).
+export async function updateProject(projectId: string, input: UpdateProjectInput) {
+  const data: Prisma.ProjectUpdateInput = {};
+
+  if (input.name !== undefined) {
+    data.name = input.name;
+  }
+  if (input.description !== undefined) {
+    data.description = input.description === "" ? null : input.description;
+  }
+
+  return prisma.project.update({ where: { id: projectId }, data });
 }

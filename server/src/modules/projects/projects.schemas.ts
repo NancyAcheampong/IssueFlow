@@ -15,3 +15,19 @@ export const addMemberSchema = z.object({
 });
 
 export type AddMemberInput = z.infer<typeof addMemberSchema>;
+
+// PRJ-05: owner-only edit of name/description. Both optional so a
+// caller can patch just one field, but at least one is required - an
+// empty patch isn't a meaningful request. An explicit empty string for
+// description means "clear it" (handled in the service layer, not
+// here) rather than "leave it alone" - that's what `undefined` means.
+export const updateProjectSchema = z
+  .object({
+    name: z.string().trim().min(1, "Project name is required.").max(200, "Project name is too long.").optional(),
+    description: z.string().trim().max(2000, "Description is too long.").optional(),
+  })
+  .refine((data) => data.name !== undefined || data.description !== undefined, {
+    message: "Provide at least one field to update.",
+  });
+
+export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;

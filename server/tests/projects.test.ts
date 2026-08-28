@@ -231,3 +231,178 @@ describe("POST /api/v1/projects/:projectId/members", () => {
     expect(response.status).toBe(401);
   });
 });
+
+describe("DELETE /api/v1/projects/:projectId/members/:userId", () => {
+  const app = createApp();
+  const runId = Date.now();
+  const ownerEmail = `remove-member-owner-${runId}@example.com`;
+  const memberEmail = `remove-member-target-${runId}@example.com`;
+  const outsiderEmail = `remove-member-outsider-${runId}@example.com`;
+  let ownerToken: string;
+  let ownerId: string;
+  let memberToken: string;
+  let memberId: string;
+  let outsiderToken: string;
+  let projectId: string;
+
+  beforeAll(async () => {
+    const owner = await signupAndLogin(app, ownerEmail, "Remove Member Owner");
+    ownerToken = owner.token;
+    ownerId = owner.userId;
+    const member = await signupAndLogin(app, memberEmail, "Remove Member Target");
+    memberToken = member.token;
+    memberId = member.userId;
+    const outsider = await signupAndLogin(app, outsiderEmail, "Remove Member Outsider");
+    outsiderToken = outsider.token;
+
+    const projectResponse = await request(app)
+      .post("/api/v1/projects")
+      .set("Authorization", `Bearer ${ownerToken}`)
+      .send({ name: "Remove Member Test Project" });
+    projectId = projectResponse.body.project.id;
+
+    await request(app)
+      .post(`/api/v1/projects/${projectId}/members`)
+      .set("Authorization", `Bearer ${ownerToken}`)
+      .send({ email: memberEmail });
+  });
+
+  afterAll(async () => {
+    const emails = [ownerEmail, memberEmail, outsiderEmail];
+    await prisma.project.deleteMany({ where: { owner: { email: { in: emails } } } });
+    await prisma.user.deleteMany({ where: { email: { in: emails } } });
+    await prisma.$disconnect();
+  });
+
+  it("rejects the owner trying to remove themselves", async () => {
+    const response = await request(app)
+      .delete(`/api/v1/projects/${projectId}/members/${ownerId}`)
+      .set("Authorization", `Bearer ${ownerToken}`);
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 403 when a non-owner member tries to remove someone", async () => {
+    const response = await request(app)
+      .delete(`/api/v1/projects/${projectId}/members/${memberId}`)
+      .set("Authorization", `Bearer ${memberToken}`);
+
+    expect(response.status).toBe(403);
+  });
+
+  it("returns 404 for a project the requester has no membership in at all", async () => {
+    const response = await request(app)
+      .delete(`/api/v1/projects/${projectId}/members/${memberId}`)
+      .set("Authorization", `Bearer ${outsiderToken}`);
+
+    expect(response.status).toBe(404);
+  });
+
+  it("lets the owner remove a real member (PRJ-04)", async () => {
+    const response = await request(app)
+      .delete(`/api/v1/projects/${projectId}/members/${memberId}`)
+      .set("Authorization", `Bearer ${ownerToken}`);
+
+    expect(response.status).toBe(204);
+
+    const membership = await prisma.projectMembership.findUnique({
+      where: { projectId_userId: { projectId, userId: memberId } },
+    });
+    expect(membership).toBeNull();
+  });
+
+  it("returns 404 removing someone who is no longer (or never was) a member", async () => {
+    const response = await request(app)
+      .delete(`/api/v1/projects/${projectId}/members/${memberId}`)
+      .set("Authorization", `Bearer ${ownerToken}`);
+
+    expect(response.status).toBe(404);
+  });
+
+  it("requires authentication", async () => {
+    const response = await request(app).delete(`/api/v1/projects/${projectId}/members/${memberId}`);
+    expect(response.status).toBe(401);
+  });
+});
+
+describe("PATCH /api/v1/projects/:projectId", () => {
+  const app = createApp();
+  const runId = Date.now();
+  const ownerEmail = `update-project-owner-${runId}@example.com`;
+  const memberEmail = `update-project-member-${runId}@example.com`;
+  let ownerToken: string;
+  let memberToken: string;
+  let projectId: string;
+
+  beforeAll(async () => {
+    const owner = await signupAndLogin(app, ownerEmail, "Update Project Owner");
+    ownerToken = owner.token;
+    const member = await signupAndLogin(app, memberEmail, "Update Project Member");
+    memberToken = member.token;
+
+    const projectResponse = await request(app)
+      .post("/api/v1/projects")
+      .set("Authorization", `Bearer ${ownerToken}`)
+      .send({ name: "Original Name", description: "Original description" });
+    projectId = projectResponse.body.project.id;
+
+    await request(app)
+      .post(`/api/v1/projects/${projectId}/members`)
+      .set("Authorization", `Bearer ${ownerToken}`)
+      .send({ email: memberEmail });
+  });
+
+  afterAll(async () => {
+    const emails = [ownerEmail, memberEmail];
+    await prisma.project.deleteMany({ where: { owner: { email: { in: emails } } } });
+    await prisma.user.deleteMany({ where: { email: { in: emails } } });
+    await prisma.$disconnect();
+  });
+
+  it("lets the owner update the name (PRJ-05)", async () => {
+    const response = await request(app)
+      .patch(`/api/v1/projects/${projectId}`)
+      .set("Authorization", `Bearer ${ownerToken}`)
+      .send({ name: "New Name" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.project.name).toBe("New Name");
+    // Untouched field should survive the partial update.
+    expect(response.body.project.description).toBe("Original description");
+  });
+
+  it("clears the description when given an empty string", async () => {
+    const response = await request(app)
+      .patch(`/api/v1/projects/${projectId}`)
+      .set("Authorization", `Bearer ${ownerToken}`)
+      .send({ description: "" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.project.description).toBeNull();
+    // Name from the previous test should be untouched.
+    expect(response.body.project.name).toBe("New Name");
+  });
+
+  it("rejects an empty patch with no fields at all", async () => {
+    const response = await request(app)
+      .patch(`/api/v1/projects/${projectId}`)
+      .set("Authorization", `Bearer ${ownerToken}`)
+      .send({});
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 403 when a non-owner member tries to update the project", async () => {
+    const response = await request(app)
+      .patch(`/api/v1/projects/${projectId}`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ name: "Hijacked Name" });
+
+    expect(response.status).toBe(403);
+  });
+
+  it("requires authentication", async () => {
+    const response = await request(app).patch(`/api/v1/projects/${projectId}`).send({ name: "No Auth" });
+    expect(response.status).toBe(401);
+  });
+});

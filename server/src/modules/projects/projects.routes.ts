@@ -2,13 +2,15 @@ import { Router } from "express";
 import { asyncHandler } from "../../lib/asyncHandler.js";
 import { requireAuth } from "../../middleware/requireAuth.js";
 import { AppError } from "../../lib/AppError.js";
-import { addMemberSchema, createProjectSchema } from "./projects.schemas.js";
+import { addMemberSchema, createProjectSchema, updateProjectSchema } from "./projects.schemas.js";
 import {
   addMember,
   createProject,
   getProjectMembership,
   listProjectsForUser,
+  removeMember,
   requireOwnerRole,
+  updateProject,
 } from "./projects.service.js";
 
 export const projectsRouter = Router();
@@ -66,5 +68,50 @@ projectsRouter.post(
     const input = addMemberSchema.parse(req.body);
     const member = await addMember(project.id, input.email);
     res.status(201).json({ member });
+  }),
+);
+
+// DELETE /api/v1/projects/:projectId/members/:userId - PRJ-04. Owner-only,
+// same 404-vs-403 authorization split as adding a member.
+projectsRouter.delete(
+  "/:projectId/members/:userId",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (!req.userId) {
+      throw AppError.unauthorized();
+    }
+    const { projectId, userId: targetUserId } = req.params;
+    if (!projectId || !targetUserId) {
+      throw AppError.badRequest("A project ID and user ID are required.");
+    }
+
+    const { membership } = await getProjectMembership(projectId, req.userId);
+    requireOwnerRole(membership);
+
+    await removeMember(projectId, req.userId, targetUserId);
+    res.status(204).send();
+  }),
+);
+
+// PATCH /api/v1/projects/:projectId - PRJ-05. Owner-only edit of
+// name/description.
+projectsRouter.patch(
+  "/:projectId",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (!req.userId) {
+      throw AppError.unauthorized();
+    }
+    const { projectId } = req.params;
+    if (!projectId) {
+      throw AppError.badRequest("A project ID is required.");
+    }
+
+    const { membership } = await getProjectMembership(projectId, req.userId);
+    requireOwnerRole(membership);
+
+    const input = updateProjectSchema.parse(req.body);
+    const project = await updateProject(projectId, input);
+    res.status(200).json({ project });
   }),
 );

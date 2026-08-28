@@ -43,6 +43,8 @@ Error responses always use one envelope shape (spec API-03):
 | POST | `/api/v1/projects` | **Authenticated** | PRJ-01. Creator becomes owner + first member (two rows written atomically — see DECISIONS.md D-11). |
 | GET | `/api/v1/projects` | **Authenticated** | PRJ-02. Only projects the requester belongs to. |
 | POST | `/api/v1/projects/:projectId/members` | **Owner only** | PRJ-03. Non-member → 404; member-but-not-owner → 403 (see DECISIONS.md D-06). |
+| DELETE | `/api/v1/projects/:projectId/members/:userId` | **Owner only** | PRJ-04. Owner can't remove themselves (400); removing a non-member is 404. |
+| PATCH | `/api/v1/projects/:projectId` | **Owner only** | PRJ-05. Partial update of name/description; empty string clears description; empty patch is rejected. |
 
 Full reference contract lives in the product spec, §8.
 
@@ -187,7 +189,13 @@ Current coverage:
   member proves the full authorization matrix live - owner succeeds,
   the same pair twice is a 409, an unknown email is a 404, an outsider
   with zero membership gets 404, and a real member who isn't the owner
-  gets 403 (D-06's two-way split, each branch actually exercised)
+  gets 403 (D-06's two-way split, each branch actually exercised);
+  remove member covers self-removal being blocked, the same D-06 split,
+  a successful removal actually confirmed gone from the database, and
+  removing an already-former member being a 404 not a silent success;
+  update project covers a partial patch leaving the untouched field
+  alone, an empty string genuinely clearing the description, an
+  entirely empty patch being rejected, and the same owner-only check
 
 ## Database migrations
 
