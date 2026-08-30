@@ -129,6 +129,38 @@ keeps these in sync — the project-creation code path is responsible for
 writing both atomically. If that ever needs debugging, this is the
 first thing to check.
 
+## D-12 (local) — Issue numbering, board rank type, and assignee deletion
+
+**Decision (numbering):** `Project.nextIssueNumber` is a per-project
+counter column. `Issue.number` (unique per `projectId`, per ISS-06) gets
+its value from an atomic `UPDATE ... SET next_issue_number =
+next_issue_number + 1` read back in the same statement — not a global
+auto-increment, and not a `SELECT MAX(number)` followed by a separate
+insert (that has an obvious race: two concurrent creates can both read
+the same max before either commits).
+
+**Why:** the spec explicitly wants GitHub-style per-project numbers
+(`#1`, `#2`, ...), which a single global sequence can't produce, and a
+naive read-then-insert isn't safe under concurrent issue creation. The
+actual increment call is Phase 2's create-issue work — today only adds
+the column the counter needs to live in.
+
+**Decision (board rank type):** `BoardPlacement.rank` is a `String`, not
+an `Int`.
+
+**Why:** D-03 (the actual ranking *algorithm* — fractional/lexicographic
+vs. transactional integer reorder) is explicitly deferred to Phase 4
+(Day 33). A string column works for either approach without needing a
+future migration to change it; committing to `Int` now would have
+quietly pre-decided D-03 by accident.
+
+**Noted, not decided by us:** Prisma chose `ON DELETE SET NULL` for
+`Issue.assigneeId` automatically (the default for an optional foreign
+key) — verified in the generated migration, not something we wrote
+explicitly. It's the right behavior (a deleted user's assignments clear
+rather than blocking their deletion), just worth recording that it's
+Prisma's default, not a deliberate choice made in the schema file.
+
 ---
 
-_Last updated: Phase 2, Aug 26 (list/create projects, add member, D-06 resolved)._
+_Last updated: Phase 2, Aug 28 (Issue + BoardPlacement schema)._

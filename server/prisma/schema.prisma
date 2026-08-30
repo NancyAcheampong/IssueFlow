@@ -1,8 +1,8 @@
 // IssueFlow database schema.
 //
-// Phase 1: User. Phase 2: Project + ProjectMembership. Domain model per
-// the product spec, Appendix A. More tables (Issue, Label, Comment,
-// BoardPlacement) arrive later in Phase 2/3.
+// Phase 1: User. Phase 2: Project + ProjectMembership, Issue +
+// BoardPlacement. Domain model per the product spec, Appendix A. Label
+// and Comment arrive in Phase 3.
 
 generator client {
   provider = "prisma-client-js"
@@ -29,8 +29,10 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  ownedProjects Project[]           @relation("ProjectOwner")
-  memberships   ProjectMembership[]
+  ownedProjects   Project[]           @relation("ProjectOwner")
+  memberships     ProjectMembership[]
+  authoredIssues  Issue[]             @relation("IssueAuthor")
+  assignedIssues  Issue[]             @relation("IssueAssignee")
 
   @@map("users")
 }
@@ -51,7 +53,17 @@ model Project {
   ownerId String @map("owner_id")
   owner   User   @relation("ProjectOwner", fields: [ownerId], references: [id])
 
-  memberships ProjectMembership[]
+  // ISS-06: an issue's `number` (like GitHub's #1, #2, ...) is unique
+  // per-project, not global - see the unique constraint on Issue below.
+  // This counter is the source of the next value. It's schema
+  // infrastructure only: the atomic "read and increment" logic that
+  // makes concurrent issue creation safe lives in the issue-creation
+  // code (Phase 2, create-issue day), not here.
+  nextIssueNumber Int @default(1) @map("next_issue_number")
+
+  memberships     ProjectMembership[]
+  issues          Issue[]
+  boardPlacements BoardPlacement[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -91,4 +103,87 @@ model ProjectMembership {
 
   @@id([projectId, userId])
   @@map("project_memberships")
+}
+
+// §1.2 / §5.2: the four board columns are fixed in the MVP, and issue
+// workflow status *is* the board column - not a separate concept. An
+// enum makes an invalid status a schema-level impossibility, not just
+// something application code has to remember to check.
+enum IssueStatus {
+  BACKLOG      @map("backlog")
+  TODO         @map("todo")
+  IN_PROGRESS  @map("in_progress")
+  DONE         @map("done")
+}
+
+// The single source of truth for a work item (§5.2: "A card is never a
+// separate copy of an issue"). `number` is scoped per-project (see
+// Project.nextIssueNumber above) - the unique constraint below is what
+// ISS-06 ("an issue always belongs to exactly one project") actually
+// means at the database level for numbering.
+model Issue {
+  id          String      @id @default(cuid())
+  projectId   String      @map("project_id")
+  number      Int
+  title       String
+  description String?
+  status      IssueStatus @default(BACKLOG)
+
+  authorId   String  @map("author_id")
+  // ASN-01/ASN-02: zero or one assignee, and only ever a current
+  // project member - that membership check is application logic
+  // (Phase 3, when assignment gets built), not something a foreign
+  // key alone can express, since "member of project X" isn't a fact
+  // the User table can encode about itself.
+  assigneeId String? @map("assignee_id")
+
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author   User    @relation("IssueAuthor", fields: [authorId], references: [id])
+  assignee User?   @relation("IssueAssignee", fields: [assigneeId], references: [id])
+
+  // Prisma requires the non-FK side of a 1:1 relation to be optional in
+  // its type system, even though the application guarantees every
+  // issue actually gets a placement row (created atomically alongside
+  // the issue itself, same pattern as Project+ProjectMembership - see
+  // D-11). The `?` here is a Prisma limitation, not a real possibility.
+  boardPlacement BoardPlacement?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([projectId, number])
+  @@index([projectId, status])
+  @@map("issues")
+}
+
+// §5.2: "Each issue has one board-placement record... does not
+// duplicate issue content or status." `issueId` as the primary key
+// (not a separate `id`) makes "exactly one placement per issue"
+// structural, the same reasoning as ProjectMembership's composite key.
+//
+// `rank` is a String, not an Int: flexible enough for either ranking
+// approach the spec allows (D-03, still open) - fractional/lexicographic
+// ranking (e.g. LexoRank-style strings) or a plain stringified integer
+// for transactional reordering. Deciding which is Phase 4's job
+// (Day 33: "decide the card-ranking approach"); today only commits to
+// a column type that doesn't foreclose either option.
+//
+// `projectId` is denormalized from the issue's own project on purpose
+// (fast board queries scoped to one project without a join) - it must
+// always match issue.projectId. Nothing at the schema level enforces
+// that agreement (Postgres has no native cross-table check constraint
+// for this); the service layer that creates a placement always derives
+// it from the issue's own projectId, never accepts it as separate input.
+model BoardPlacement {
+  issueId   String   @id @map("issue_id")
+  projectId String   @map("project_id")
+  rank      String
+  version   Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  issue   Issue   @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, rank])
+  @@map("board_placements")
 }

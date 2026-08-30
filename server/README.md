@@ -182,6 +182,11 @@ Current coverage:
 - `tests/project.test.ts` — Prisma-level: creates a project + owner
   membership together, proves the composite key rejects a duplicate
   membership, proves deleting a project cascades to its memberships
+- `tests/issue.test.ts` — Prisma-level: creates an issue + board
+  placement together via the same atomic counter increment the real
+  create-issue endpoint will use, proves the project+number unique
+  constraint rejects a duplicate, and proves both cascades (issue →
+  its placement, project → its issues)
 - `tests/projects.test.ts` — the whole projects surface through the real
   HTTP app, with genuinely separate user accounts throughout: create
   confirms a real `ProjectMembership` row (not just the response shape);
