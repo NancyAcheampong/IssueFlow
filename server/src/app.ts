@@ -8,6 +8,7 @@ import { livenessRouter, readinessRouter } from "./modules/health/health.routes.
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { usersRouter } from "./modules/users/users.routes.js";
 import { projectsRouter } from "./modules/projects/projects.routes.js";
+import { issuesRouter } from "./modules/issues/issues.routes.js";
 import { notFoundHandler, errorHandler } from "./middleware/errorHandler.js";
 
 export function createApp(): Express {
@@ -38,9 +39,10 @@ export function createApp(): Express {
   app.use("/api/v1/auth", authRouter);
   app.use("/api/v1", usersRouter);
   app.use("/api/v1/projects", projectsRouter);
+  app.use("/api/v1/projects", issuesRouter);
 
-  // Future routers (issues, comments, labels, board, search) get
-  // mounted here in later phases, all under /api/v1.
+  // Future routers (comments, labels, board, search) get mounted here
+  // in later phases, all under /api/v1.
 
   app.use(notFoundHandler);
   app.use(errorHandler);

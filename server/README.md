@@ -45,6 +45,7 @@ Error responses always use one envelope shape (spec API-03):
 | POST | `/api/v1/projects/:projectId/members` | **Owner only** | PRJ-03. Non-member → 404; member-but-not-owner → 403 (see DECISIONS.md D-06). |
 | DELETE | `/api/v1/projects/:projectId/members/:userId` | **Owner only** | PRJ-04. Owner can't remove themselves (400); removing a non-member is 404. |
 | PATCH | `/api/v1/projects/:projectId` | **Owner only** | PRJ-05. Partial update of name/description; empty string clears description; empty patch is rejected. |
+| POST | `/api/v1/projects/:projectId/issues` | **Member** | ISS-01. Any project member (not owner-only). Creates the `Issue` + its `BoardPlacement` together; assignee must be a current project member (ASN-02). |
 
 Full reference contract lives in the product spec, §8.
 
@@ -187,6 +188,13 @@ Current coverage:
   create-issue endpoint will use, proves the project+number unique
   constraint rejects a duplicate, and proves both cascades (issue →
   its placement, project → its issues)
+- `tests/issues.test.ts` — `POST /api/v1/projects/:projectId/issues`
+  through the real HTTP app: any member (not just the owner) can create
+  one; per-project numbers actually increment sequentially (1, 2, ...);
+  an explicit status and a valid assignee are both accepted; an
+  assignee who isn't a current project member is rejected (ASN-02); a
+  missing title fails validation; and the same D-06 split as every
+  other project-scoped route (no membership at all → 404)
 - `tests/projects.test.ts` — the whole projects surface through the real
   HTTP app, with genuinely separate user accounts throughout: create
   confirms a real `ProjectMembership` row (not just the response shape);
