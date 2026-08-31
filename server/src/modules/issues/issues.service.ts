@@ -59,3 +59,40 @@ export async function createIssue(projectId: string, authorId: string, input: Cr
     include: { boardPlacement: true },
   });
 }
+
+// ISS-03: any project member can view an issue's full detail. This
+// route isn't nested under /projects/:projectId (it's just
+// /issues/:issueId), so authorization runs backwards from the other
+// routes in this module: look the issue up first to find which
+// project it belongs to, then apply the same D-06 policy - no
+// membership in that project means the same 404 as if the issue
+// didn't exist at all.
+export async function getIssueById(issueId: string, userId: string) {
+  const issue = await prisma.issue.findUnique({
+    where: { id: issueId },
+    include: { boardPlacement: true },
+  });
+
+  if (!issue) {
+    throw AppError.notFound("Issue not found.");
+  }
+
+  const membership = await prisma.projectMembership.findUnique({
+    where: { projectId_userId: { projectId: issue.projectId, userId } },
+  });
+  if (!membership) {
+    throw AppError.notFound("Issue not found.");
+  }
+
+  return issue;
+}
+
+// Plain per-project listing, ordered by issue number. Keyword search
+// and filters are Phase 6 (SRC-*); pagination is ISS-07 (P1, later
+// this phase) - both deliberately not here yet.
+export async function listIssuesForProject(projectId: string) {
+  return prisma.issue.findMany({
+    where: { projectId },
+    orderBy: { number: "asc" },
+  });
+}

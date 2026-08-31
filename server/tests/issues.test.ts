@@ -128,3 +128,141 @@ describe("POST /api/v1/projects/:projectId/issues", () => {
     expect(response.status).toBe(401);
   });
 });
+
+describe("GET /api/v1/projects/:projectId/issues", () => {
+  const app = createApp();
+  const runId = Date.now();
+  const memberEmail = `list-issues-member-${runId}@example.com`;
+  const outsiderEmail = `list-issues-outsider-${runId}@example.com`;
+  let memberToken: string;
+  let outsiderToken: string;
+  let projectAId: string;
+  let projectBId: string;
+
+  beforeAll(async () => {
+    const member = await signupAndLogin(app, memberEmail, "List Issues Member");
+    memberToken = member.token;
+    const outsider = await signupAndLogin(app, outsiderEmail, "List Issues Outsider");
+    outsiderToken = outsider.token;
+
+    const projectA = await request(app)
+      .post("/api/v1/projects")
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ name: "List Issues Project A" });
+    projectAId = projectA.body.project.id;
+
+    const projectB = await request(app)
+      .post("/api/v1/projects")
+      .set("Authorization", `Bearer ${outsiderToken}`)
+      .send({ name: "List Issues Project B" });
+    projectBId = projectB.body.project.id;
+
+    await request(app)
+      .post(`/api/v1/projects/${projectAId}/issues`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ title: "A - first" });
+    await request(app)
+      .post(`/api/v1/projects/${projectAId}/issues`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ title: "A - second" });
+    await request(app)
+      .post(`/api/v1/projects/${projectBId}/issues`)
+      .set("Authorization", `Bearer ${outsiderToken}`)
+      .send({ title: "B - unrelated" });
+  });
+
+  afterAll(async () => {
+    const emails = [memberEmail, outsiderEmail];
+    await prisma.project.deleteMany({ where: { owner: { email: { in: emails } } } });
+    await prisma.user.deleteMany({ where: { email: { in: emails } } });
+    await prisma.$disconnect();
+  });
+
+  it("lists only the requested project's issues, in number order, and never another project's", async () => {
+    const response = await request(app)
+      .get(`/api/v1/projects/${projectAId}/issues`)
+      .set("Authorization", `Bearer ${memberToken}`);
+
+    expect(response.status).toBe(200);
+    const titles = (response.body.issues as { title: string; number: number }[]).map((i) => i.title);
+    expect(titles).toEqual(["A - first", "A - second"]);
+    expect(titles).not.toContain("B - unrelated");
+  });
+
+  it("returns 404 for a project the requester has no membership in (D-06)", async () => {
+    const response = await request(app)
+      .get(`/api/v1/projects/${projectBId}/issues`)
+      .set("Authorization", `Bearer ${memberToken}`);
+
+    expect(response.status).toBe(404);
+  });
+
+  it("requires authentication", async () => {
+    const response = await request(app).get(`/api/v1/projects/${projectAId}/issues`);
+    expect(response.status).toBe(401);
+  });
+});
+
+describe("GET /api/v1/issues/:issueId", () => {
+  const app = createApp();
+  const runId = Date.now();
+  const memberEmail = `issue-detail-member-${runId}@example.com`;
+  const outsiderEmail = `issue-detail-outsider-${runId}@example.com`;
+  let memberToken: string;
+  let outsiderToken: string;
+  let issueId: string;
+
+  beforeAll(async () => {
+    const member = await signupAndLogin(app, memberEmail, "Issue Detail Member");
+    memberToken = member.token;
+    const outsider = await signupAndLogin(app, outsiderEmail, "Issue Detail Outsider");
+    outsiderToken = outsider.token;
+
+    const project = await request(app)
+      .post("/api/v1/projects")
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ name: "Issue Detail Test Project" });
+
+    const issueResponse = await request(app)
+      .post(`/api/v1/projects/${project.body.project.id}/issues`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ title: "Detail test issue", description: "Some detail" });
+    issueId = issueResponse.body.issue.id;
+  });
+
+  afterAll(async () => {
+    const emails = [memberEmail, outsiderEmail];
+    await prisma.project.deleteMany({ where: { owner: { email: { in: emails } } } });
+    await prisma.user.deleteMany({ where: { email: { in: emails } } });
+    await prisma.$disconnect();
+  });
+
+  it("returns full issue detail, including its board placement, for a project member (ISS-03)", async () => {
+    const response = await request(app).get(`/api/v1/issues/${issueId}`).set("Authorization", `Bearer ${memberToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.issue).toMatchObject({ title: "Detail test issue", description: "Some detail" });
+    expect(response.body.issue.boardPlacement).toBeTruthy();
+  });
+
+  it("returns 404 for someone with no membership in the issue's project (D-06)", async () => {
+    const response = await request(app)
+      .get(`/api/v1/issues/${issueId}`)
+      .set("Authorization", `Bearer ${outsiderToken}`);
+
+    expect(response.status).toBe(404);
+  });
+
+  it("returns 404 for an issue id that doesn't exist at all", async () => {
+    const response = await request(app)
+      .get("/api/v1/issues/not-a-real-issue-id")
+      .set("Authorization", `Bearer ${memberToken}`);
+
+    expect(response.status).toBe(404);
+  });
+
+  it("requires authentication", async () => {
+    const response = await request(app).get(`/api/v1/issues/${issueId}`);
+    expect(response.status).toBe(401);
+  });
+});
