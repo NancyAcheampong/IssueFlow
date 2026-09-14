@@ -266,3 +266,133 @@ describe("GET /api/v1/issues/:issueId", () => {
     expect(response.status).toBe(401);
   });
 });
+
+describe("PATCH /api/v1/issues/:issueId", () => {
+  const app = createApp();
+  const runId = Date.now();
+  const memberEmail = `edit-issue-member-${runId}@example.com`;
+  const otherMemberEmail = `edit-issue-other-member-${runId}@example.com`;
+  const outsiderEmail = `edit-issue-outsider-${runId}@example.com`;
+  let memberToken: string;
+  let otherMemberId: string;
+  let outsiderToken: string;
+  let issueId: string;
+
+  beforeAll(async () => {
+    const member = await signupAndLogin(app, memberEmail, "Edit Issue Member");
+    memberToken = member.token;
+    const otherMember = await signupAndLogin(app, otherMemberEmail, "Edit Issue Other Member");
+    otherMemberId = otherMember.userId;
+    const outsider = await signupAndLogin(app, outsiderEmail, "Edit Issue Outsider");
+    outsiderToken = outsider.token;
+
+    const project = await request(app)
+      .post("/api/v1/projects")
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ name: "Edit Issue Test Project" });
+    const projectId = project.body.project.id as string;
+
+    await request(app)
+      .post(`/api/v1/projects/${projectId}/members`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ email: otherMemberEmail });
+
+    const issueResponse = await request(app)
+      .post(`/api/v1/projects/${projectId}/issues`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ title: "Original title", description: "Original description" });
+    issueId = issueResponse.body.issue.id;
+  });
+
+  afterAll(async () => {
+    const emails = [memberEmail, otherMemberEmail, outsiderEmail];
+    await prisma.project.deleteMany({ where: { owner: { email: { in: emails } } } });
+    await prisma.user.deleteMany({ where: { email: { in: emails } } });
+    await prisma.$disconnect();
+  });
+
+  it("lets a project member edit the title, leaving other fields untouched (ISS-04)", async () => {
+    const response = await request(app)
+      .patch(`/api/v1/issues/${issueId}`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ title: "Updated title" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.issue).toMatchObject({
+      title: "Updated title",
+      description: "Original description",
+    });
+  });
+
+  it("assigns the issue to a valid project member (ASN-02)", async () => {
+    const response = await request(app)
+      .patch(`/api/v1/issues/${issueId}`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ assigneeId: otherMemberId });
+
+    expect(response.status).toBe(200);
+    expect(response.body.issue.assigneeId).toBe(otherMemberId);
+  });
+
+  it("unassigns the issue with an explicit null assigneeId", async () => {
+    const response = await request(app)
+      .patch(`/api/v1/issues/${issueId}`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ assigneeId: null });
+
+    expect(response.status).toBe(200);
+    expect(response.body.issue.assigneeId).toBeNull();
+  });
+
+  it("clears the description with an explicit empty string", async () => {
+    const response = await request(app)
+      .patch(`/api/v1/issues/${issueId}`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ description: "" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.issue.description).toBeNull();
+  });
+
+  it("rejects an assignee who isn't a current project member (ASN-02)", async () => {
+    const response = await request(app)
+      .patch(`/api/v1/issues/${issueId}`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ assigneeId: "not-a-real-member-id" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.fields.assigneeId).toBeDefined();
+  });
+
+  it("rejects an empty title", async () => {
+    const response = await request(app)
+      .patch(`/api/v1/issues/${issueId}`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ title: "" });
+
+    expect(response.status).toBe(400);
+  });
+
+  it("rejects a patch with no fields at all", async () => {
+    const response = await request(app)
+      .patch(`/api/v1/issues/${issueId}`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({});
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 404 for someone with no membership in the issue's project (D-06)", async () => {
+    const response = await request(app)
+      .patch(`/api/v1/issues/${issueId}`)
+      .set("Authorization", `Bearer ${outsiderToken}`)
+      .send({ title: "Should not apply" });
+
+    expect(response.status).toBe(404);
+  });
+
+  it("requires authentication", async () => {
+    const response = await request(app).patch(`/api/v1/issues/${issueId}`).send({ title: "No auth" });
+    expect(response.status).toBe(401);
+  });
+});

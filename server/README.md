@@ -48,6 +48,7 @@ Error responses always use one envelope shape (spec API-03):
 | POST | `/api/v1/projects/:projectId/issues` | **Member** | ISS-01. Any project member (not owner-only). Creates the `Issue` + its `BoardPlacement` together; assignee must be a current project member (ASN-02). |
 | GET | `/api/v1/projects/:projectId/issues` | **Member** | Plain list, ordered by issue number. Search/filters (Phase 6) and pagination (ISS-07) not yet implemented. |
 | GET | `/api/v1/issues/:issueId` | **Member** | ISS-03. Not nested under `/projects` — authorization looks the issue up first, then checks membership in *its* project (D-06 applies the same way). |
+| PATCH | `/api/v1/issues/:issueId` | **Member** | ISS-04. Partial update of title/description/assignee (member-level, not owner-only). Empty string clears description; `null` unassigns; reassigning re-validates project membership (ASN-02); empty patch is rejected. Status transitions and labels are out of scope — see DECISIONS.md D-13. |
 
 Full reference contract lives in the product spec, §8.
 
@@ -202,7 +203,12 @@ Current coverage:
   with no membership in that issue's project, 404 for an id that
   doesn't exist at all - proving GET /issues/:issueId's
   authorization (which runs backwards from every other route in this
-  module) actually works. Every route's D-06 split (404 for a
+  module) actually works. Edit (PATCH): a member can edit the title
+  without disturbing other fields; a valid member can be assigned; an
+  explicit `null` unassigns; an explicit `""` clears the description;
+  an invalid/non-member assignee is rejected (ASN-02); an empty title
+  and a wholly empty patch are both rejected; a non-member gets 404
+  (D-06); unauthenticated gets 401. Every route's D-06 split (404 for a
   non-member) is exercised, not just asserted.
 - `tests/projects.test.ts` — the whole projects surface through the real
   HTTP app, with genuinely separate user accounts throughout: create

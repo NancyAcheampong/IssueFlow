@@ -3,8 +3,8 @@ import { asyncHandler } from "../../lib/asyncHandler.js";
 import { requireAuth } from "../../middleware/requireAuth.js";
 import { AppError } from "../../lib/AppError.js";
 import { getProjectMembership } from "../projects/projects.service.js";
-import { createIssueSchema } from "./issues.schemas.js";
-import { createIssue, getIssueById, listIssuesForProject } from "./issues.service.js";
+import { createIssueSchema, updateIssueSchema } from "./issues.schemas.js";
+import { createIssue, getIssueById, listIssuesForProject, updateIssue } from "./issues.service.js";
 
 // Mounted at /api/v1/projects.
 export const issuesRouter = Router();
@@ -74,5 +74,33 @@ issueRouter.get(
 
     const issue = await getIssueById(issueId, req.userId);
     res.status(200).json({ issue });
+  }),
+);
+
+// PATCH /api/v1/issues/:issueId - ISS-04. Any project member can edit
+// title/description/assignee (member-level, not owner-only - same
+// getIssueById D-06 check as GET, no requireOwnerRole gate). Status
+// transitions and labels are out of scope here - see the comment on
+// updateIssueSchema.
+issueRouter.patch(
+  "/:issueId",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (!req.userId) {
+      throw AppError.unauthorized();
+    }
+    const { issueId } = req.params;
+    if (!issueId) {
+      throw AppError.badRequest("An issue ID is required.");
+    }
+
+    // getIssueById both enforces D-06 and hands back the issue's
+    // projectId, which updateIssue needs for assignee validation -
+    // no separate lookup.
+    const issue = await getIssueById(issueId, req.userId);
+
+    const input = updateIssueSchema.parse(req.body);
+    const updated = await updateIssue(issueId, issue.projectId, input);
+    res.status(200).json({ issue: updated });
   }),
 );

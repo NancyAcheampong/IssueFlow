@@ -163,4 +163,30 @@ Prisma's default, not a deliberate choice made in the schema file.
 
 ---
 
-_Last updated: Phase 2, Aug 28 (Issue + BoardPlacement schema)._
+## D-13 (local) — Edit-issue scope: no status, no labels
+
+**Decision:** `PATCH /api/v1/issues/:issueId` (ISS-04) only ever touches
+`title`, `description`, and `assigneeId`. It's deliberately *not* a
+general-purpose "patch anything" endpoint — `status` is not accepted
+here even though it's a column on the same row.
+
+**Why:** status transitions (close/reopen) are their own scheduled unit
+of work with their own semantics to get right (e.g. does reopening reset
+anything, does the transition need its own audit trail later) — folding
+them into a generic field-patch would either under-specify that work or
+force it to happen accidentally, today, as a side effect of building
+something else. Labels aren't excluded by choice so much as by
+existence — the `Label` model doesn't land until Phase 3, so there's
+nothing to attach here yet.
+
+**Convention:** extends the same "undefined leaves a field alone"
+pattern already established by `updateProjectSchema`/`updateProject`
+(PRJ-05) to a nullable field: for `assigneeId`, `undefined` leaves the current
+assignee alone, an explicit `null` unassigns, and a string reassigns
+(re-validated against project membership, same ASN-02 rule as at
+creation). `description` keeps the existing convention exactly —
+`undefined` leaves it alone, explicit `""` clears it.
+
+---
+
+_Last updated: Phase 2, Sep 1 (edit issue — title/description/assignee, ISS-04)._

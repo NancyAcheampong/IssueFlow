@@ -1,12 +1,15 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../lib/AppError.js";
-import type { CreateIssueInput } from "./issues.schemas.js";
+import type { CreateIssueInput, UpdateIssueInput } from "./issues.schemas.js";
 
 // ASN-02: an issue's assignee must be a current member of the same
 // project. Needs a DB lookup, so it's checked here rather than in the
 // zod schema (which can only validate the shape of the input, not
-// whether it refers to something real).
-async function assertAssigneeIsMember(projectId: string, assigneeId: string): Promise<void> {
+// whether it refers to something real). Exported - reused as-is by
+// updateIssue below, since reassigning obeys the identical rule as
+// assigning at creation.
+export async function assertAssigneeIsMember(projectId: string, assigneeId: string): Promise<void> {
   const membership = await prisma.projectMembership.findUnique({
     where: { projectId_userId: { projectId, userId: assigneeId } },
   });
@@ -85,6 +88,37 @@ export async function getIssueById(issueId: string, userId: string) {
   }
 
   return issue;
+}
+
+// ISS-04: any project member can edit title/description/assignee.
+// Caller already knows both issueId and the issue's projectId (from
+// getIssueById in the route) - no need to re-fetch either here.
+// Only the fields actually present in the input get written -
+// `undefined` means "leave alone," matching updateProject's convention
+// for description, and extended to assigneeId as documented in
+// issues.schemas.ts.
+export async function updateIssue(issueId: string, projectId: string, input: UpdateIssueInput) {
+  if (input.assigneeId) {
+    await assertAssigneeIsMember(projectId, input.assigneeId);
+  }
+
+  const data: Prisma.IssueUpdateInput = {};
+
+  if (input.title !== undefined) {
+    data.title = input.title;
+  }
+  if (input.description !== undefined) {
+    data.description = input.description === "" ? null : input.description;
+  }
+  if (input.assigneeId !== undefined) {
+    data.assignee = input.assigneeId === null ? { disconnect: true } : { connect: { id: input.assigneeId } };
+  }
+
+  return prisma.issue.update({
+    where: { id: issueId },
+    data,
+    include: { boardPlacement: true },
+  });
 }
 
 // Plain per-project listing, ordered by issue number. Keyword search
