@@ -189,4 +189,218 @@ creation). `description` keeps the existing convention exactly —
 
 ---
 
-_Last updated: Phase 2, Sep 1 (edit issue — title/description/assignee, ISS-04)._
+## D-14 (local) — Close/reopen model: DONE is "closed," no separate flag
+
+**Decision:** "Closed" is not a separate boolean or timestamp column.
+Closing an issue sets `status = DONE`; reopening sets `status =
+BACKLOG` (always BACKLOG, not whatever status the issue held before
+closing). Both are dedicated actions — `POST /:issueId/close` and
+`POST /:issueId/reopen` — not a value accepted by the generic
+`PATCH /:issueId` (D-13). Both are idempotent: closing an
+already-closed issue or reopening an already-open one is a 200 no-op.
+
+**Why:** the domain model already has a single 4-value `status` column
+doing double duty as both "which board column" and "is this done" —
+introducing a second, independent closed/open flag would let the two
+disagree (an issue marked closed but sitting in the `IN_PROGRESS`
+column) with nothing in the schema to keep them in sync. Treating
+`DONE` as the one and only closed state avoids that split-brain outright.
+Reopening always to `BACKLOG` rather than "whatever it was before" is
+the honest choice given there's no history table recording prior
+status — inventing a fake memory of the last status would be more
+surprising than resetting to "needs triage," which is what reopened
+work actually needs. Dedicated actions instead of a generic status
+field keep this the *only* way to change status until board move
+(Phase 4, Day 39-ish) arrives with its own — different — semantics
+(status changes as a side effect of a drag, bundled with a rank change
+in one transaction, not a freestanding edit).
+
+**Rejected:** a separate `closedAt: DateTime?` column, modeled after
+GitHub's actual open/closed state (independent of which column a card
+sits in). More correct to the real spec inspiration, but the current
+Kanban design (Phase 4) treats the board columns *as* the status
+machine — there's no design for a card that's simultaneously "in the
+Done column" and "still open," or vice versa. Worth revisiting if a
+future phase needs that distinction; not invented pre-emptively here.
+
+---
+
+## D-15 (local) — Markdown rendering + sanitization: `marked` + `sanitize-html`
+
+**Decision:** a comment's `bodyMarkdown` (exactly what the author
+submitted) is rendered to HTML with `marked`, then passed through
+`sanitize-html` with an explicit tag/attribute/URL-scheme allowlist,
+and the sanitized result is stored as `bodyHtml` — once, at write time,
+not recomputed on every read. The API returns both fields.
+
+**Why:** Markdown intentionally permits raw HTML pass-through — `marked`
+alone will turn `<script>alert(1)</script>` embedded in a comment into
+exactly that, verbatim. Rendering without sanitizing is not a partial
+mitigation, it's no mitigation. `sanitize-html`'s allowlist model (name
+every tag/attribute/scheme that's allowed, discard everything else) is
+the safer default than a denylist, which only ever blocks the specific
+attacks someone thought to list. Computing `bodyHtml` once at creation
+(rather than on every GET, or leaving rendering to the client) keeps
+the sanitization logic in exactly one place server-side and makes the
+stored value directly testable — see the dedicated XSS regression
+tests in `tests/comments.test.ts`. Comments aren't editable yet (no
+scheduled day for it through Phase 3's exit gate), so a stored
+rendering can't go stale; if edit-comment ever lands, `bodyHtml` needs
+recomputing on update too, not before.
+
+**Rejected:** `DOMPurify` + `jsdom` — the more common sanitizer pairing
+in the Node ecosystem, but it requires a full DOM shim (`jsdom`) just
+to run server-side, meaningfully heavier than `sanitize-html`'s
+zero-DOM string-based approach for a need this contained. Rejected:
+`markdown-it` in place of `marked` — an equally reasonable choice, not
+picked for any strong reason beyond `marked` being the more widely
+used default; nothing here depends on markdown-it-specific plugins.
+
+## D-16 (local) — Comment threading: flat storage, self-relation `parentId`
+
+**Decision:** `Comment.parentId` is a nullable self-relation, one
+column, no separate depth/thread-id bookkeeping. A reply's parent must
+be a comment on the *same issue* (enforced in the service layer — a
+foreign key alone can't express "and also matches this other row's
+issueId"). The list endpoint returns a flat, `createdAt`-ordered array;
+building a nested tree from `parentId` is left to the client.
+
+**Why:** arbitrary-depth threading (a reply to a reply to a reply) is
+what GitHub-style discussion actually looks like, and a self-relation
+supports that for free without a schema change if the product ever
+wants deeper threads than expected. Keeping the API response flat
+mirrors D-12's reasoning on `BoardPlacement.rank`: tree-building is
+presentation logic, not something worth pre-deciding server-side before
+there's a real frontend consuming it. Deleting a parent comment
+cascades to its replies (`ON DELETE CASCADE` on `parentId`) — an
+orphaned reply with no parent to thread under isn't a state worth
+keeping, same reasoning as `ProjectMembership`'s cascade.
+
+## D-17 (local) — @mention resolution: email local-part, project-scoped only
+
+**Decision:** `@mention` tokens in a comment body are matched against
+the *local part* of a current project member's email address (the
+part before `@`), case-insensitively — `@jane.doe` resolves against
+`jane.doe@example.com`. Resolution only ever considers members of the
+comment's own project. An unmatched token is silently dropped, not an
+error. Matches are stored as real rows in `CommentMention`
+(`commentId`, `userId`), not just returned transiently — future
+notification work (not yet scheduled) has something durable to query.
+
+**Why:** there's no username/handle field anywhere in this schema
+(`User` has `email` and `displayName` only) — email local-part is the
+closest existing thing to a stable, typically-unique, mention-friendly
+handle without inventing and migrating a new column for it. Restricting
+resolution to current project members is the same D-06 privacy boundary
+applied to a new surface: without it, a comment could be used to probe
+whether an arbitrary email belongs to a real account, or to notify
+someone with no access to the project at all. Silently dropping
+unmatched tokens (rather than 400ing) treats `@whoever` as ordinary text
+if it doesn't resolve to anyone real — a typo in a mention shouldn't
+block posting the comment.
+
+**Rejected:** adding a dedicated `username` column now, purely to make
+mentions nicer. Real scope creep for a Phase 3 day that was never about
+redesigning identity — worth reconsidering only if email-local-part
+mentions prove genuinely confusing in practice (e.g. two members
+sharing a local part across different domains, which the current
+per-project matching does *not* de-duplicate or disambiguate).
+
+## D-18 (local) — Labels: member-level, project-scoped uniqueness, 400 on cross-project attach
+
+**Decision:** `Label` is scoped to a project (`@@unique([projectId, name])`
+— "bug" in one project is unrelated to "bug" in another). Creating,
+listing, and deleting labels is member-level, same as issue creation —
+no `requireOwnerRole` gate. Attaching a label to an issue rejects a
+`labelId` belonging to a *different* project with a 400 (the same
+treatment as an invalid `assigneeId` or a cross-issue `parentId` —
+D-13/D-16), not a 404: the label id came from the caller's own request
+body, so a mismatch is a bad request about their input, not a question
+of whether some resource exists.
+
+**Why:** labels are collaborative classification metadata — exactly
+the same category of thing as creating an issue itself, which is
+already member-level — not a project-settings change like renaming the
+project or adding/removing members (both of which stay owner-only).
+Project-scoping the uniqueness constraint (rather than global) matches
+how every other project-scoped resource in this schema behaves
+(`Issue.number` is unique per project, not globally — D-12) and how
+real teams actually use labels — "bug" means something specific to
+each team, not one shared taxonomy across every project in the system.
+
+---
+
+## D-19 (local) — Board ranking: fractional/lexicographic keys via `fractional-indexing`
+
+**Decision:** D-03 (deferred since D-12) is resolved: `BoardPlacement.rank`
+uses fractional/lexicographic indexing, generated by the
+`fractional-indexing` package (the same approach popularized by Figma;
+this project uses the well-tested library rather than a hand-rolled
+implementation). A new card ranks after the current last card in its
+own `(project, status)` column, not after "whatever was created most
+recently in the project" — columns rank independently of each other.
+The board endpoint (`GET /:projectId/board`) groups issues by status
+and sorts each group by comparing `rank` strings directly (`<`/`>`),
+never `.localeCompare()` and never a SQL `ORDER BY` — see the code
+comment in `board.service.ts` for why a locale-aware or DB-collation
+comparison is the wrong tool here.
+
+**Why:** fractional indexing is exactly what `BoardPlacement.rank`'s
+`String` type (D-12) was left open for — inserting a card between two
+existing ones (Phase 4's actual reordering feature, arriving with move
+card next) means generating one new key, never rewriting every other
+row's rank the way integer positions would require. Comparing app-side
+with plain string comparison, not the database's own collation,
+decouples correctness from which Postgres this ever runs against.
+
+**Verified, not assumed:** fractional-indexing's correctness depends on
+every comparison being strict code-point/byte order. This project's
+Postgres (`postgres:16-alpine`, via `docker-compose.yml`) happens to
+default to `C.UTF-8` collation — confirmed live via `psql`, not
+guessed — which is byte-order and would make even a SQL `ORDER BY` on
+this column safe too. Doing the comparison in JS instead of relying on
+that (see above) means this doesn't quietly break if the database ever
+changes.
+
+---
+
+## D-20 (local) — Move card: neighbor-relative positioning, one transaction, optimistic concurrency
+
+**Decision:** `PATCH /api/v1/issues/:issueId/move` takes `{ status?,
+prevIssueId?, nextIssueId?, version }`. Position is expressed
+relative to neighboring cards ("this card now sits between
+`prevIssueId` and `nextIssueId`"), not as a raw rank string the client
+would have to know how to generate itself. `status` and the
+`BoardPlacement` update (new `rank`, `version` incremented) happen
+inside one Prisma interactive transaction. `version` is required and
+checked with a conditional `updateMany` (`where: { issueId, version }`)
+— a zero-row result means the placement moved since the client last
+saw it, and the whole transaction (status change included) rolls back
+with a 409, never a partial write.
+
+**Why:** neighbor-relative positioning matches exactly what a
+drag-and-drop UI already knows at the moment of a drop ("dropped
+between card X and card Y") — asking the client to compute a
+fractional-indexing key itself would leak an implementation detail
+across the API boundary for no benefit. Bundling status + rank in one
+transaction is literally the day's stated scope ("status + rank, one
+transaction") and matters concretely: without it, a request that both
+changes status and loses the concurrency race could leave an issue
+showing a new status while still occupying its old board position (or
+vice versa) — a card that's lying about which column it's actually in.
+Optimistic concurrency (rather than locking) fits a UI-driven action
+like dragging a card: conflicts are rare (two people moving the exact
+same card at the exact same moment), so paying for a lock on every move
+isn't worth it — better to detect the rare conflict after the fact and
+let the client (Phase 4's frontend days, Sep 17-19) re-fetch and retry.
+
+**Rejected:** array-index positioning (`position: 3`) instead of
+neighbor ids. Simpler on paper, but it re-introduces exactly the
+"reindex every row on insert" problem fractional indexing (D-19) was
+adopted to avoid, and it's a worse fit for a concurrent multi-user
+board where "index 3" can mean a different card by the time the
+request arrives.
+
+---
+
+_Last updated: Phase 4 batch, Sep 15-16 (ranking decision + get-board through move-card — see git log for the day-by-day breakdown)._

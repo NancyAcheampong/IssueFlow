@@ -12,8 +12,13 @@ async function signupAndLogin(app: Express, email: string, displayName: string) 
     displayName,
     password: TEST_PASSWORD,
   });
-  const loginResponse = await request(app).post("/api/v1/auth/login").send({ email, password: TEST_PASSWORD });
-  return { userId: signupResponse.body.user.id as string, token: loginResponse.body.token as string };
+  const loginResponse = await request(app)
+    .post("/api/v1/auth/login")
+    .send({ email, password: TEST_PASSWORD });
+  return {
+    userId: signupResponse.body.user.id as string,
+    token: loginResponse.body.token as string,
+  };
 }
 
 describe("POST /api/v1/projects/:projectId/issues", () => {
@@ -124,7 +129,9 @@ describe("POST /api/v1/projects/:projectId/issues", () => {
   });
 
   it("requires authentication", async () => {
-    const response = await request(app).post(`/api/v1/projects/${projectId}/issues`).send({ title: "No auth" });
+    const response = await request(app)
+      .post(`/api/v1/projects/${projectId}/issues`)
+      .send({ title: "No auth" });
     expect(response.status).toBe(401);
   });
 });
@@ -184,7 +191,9 @@ describe("GET /api/v1/projects/:projectId/issues", () => {
       .set("Authorization", `Bearer ${memberToken}`);
 
     expect(response.status).toBe(200);
-    const titles = (response.body.issues as { title: string; number: number }[]).map((i) => i.title);
+    const titles = (response.body.issues as { title: string; number: number }[]).map(
+      (i) => i.title,
+    );
     expect(titles).toEqual(["A - first", "A - second"]);
     expect(titles).not.toContain("B - unrelated");
   });
@@ -200,6 +209,42 @@ describe("GET /api/v1/projects/:projectId/issues", () => {
   it("requires authentication", async () => {
     const response = await request(app).get(`/api/v1/projects/${projectAId}/issues`);
     expect(response.status).toBe(401);
+  });
+
+  it("defaults to page 1 of 25 and reports accurate pagination metadata (ISS-07)", async () => {
+    const response = await request(app)
+      .get(`/api/v1/projects/${projectAId}/issues`)
+      .set("Authorization", `Bearer ${memberToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.pagination).toEqual({ page: 1, pageSize: 25, total: 2, totalPages: 1 });
+  });
+
+  it("honors page and pageSize query params", async () => {
+    const response = await request(app)
+      .get(`/api/v1/projects/${projectAId}/issues?page=2&pageSize=1`)
+      .set("Authorization", `Bearer ${memberToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.issues).toHaveLength(1);
+    expect(response.body.issues[0].title).toBe("A - second");
+    expect(response.body.pagination).toEqual({ page: 2, pageSize: 1, total: 2, totalPages: 2 });
+  });
+
+  it("rejects an invalid page number", async () => {
+    const response = await request(app)
+      .get(`/api/v1/projects/${projectAId}/issues?page=0`)
+      .set("Authorization", `Bearer ${memberToken}`);
+
+    expect(response.status).toBe(400);
+  });
+
+  it("rejects a pageSize above the cap", async () => {
+    const response = await request(app)
+      .get(`/api/v1/projects/${projectAId}/issues?pageSize=101`)
+      .set("Authorization", `Bearer ${memberToken}`);
+
+    expect(response.status).toBe(400);
   });
 });
 
@@ -238,10 +283,15 @@ describe("GET /api/v1/issues/:issueId", () => {
   });
 
   it("returns full issue detail, including its board placement, for a project member (ISS-03)", async () => {
-    const response = await request(app).get(`/api/v1/issues/${issueId}`).set("Authorization", `Bearer ${memberToken}`);
+    const response = await request(app)
+      .get(`/api/v1/issues/${issueId}`)
+      .set("Authorization", `Bearer ${memberToken}`);
 
     expect(response.status).toBe(200);
-    expect(response.body.issue).toMatchObject({ title: "Detail test issue", description: "Some detail" });
+    expect(response.body.issue).toMatchObject({
+      title: "Detail test issue",
+      description: "Some detail",
+    });
     expect(response.body.issue.boardPlacement).toBeTruthy();
   });
 
@@ -392,7 +442,257 @@ describe("PATCH /api/v1/issues/:issueId", () => {
   });
 
   it("requires authentication", async () => {
-    const response = await request(app).patch(`/api/v1/issues/${issueId}`).send({ title: "No auth" });
+    const response = await request(app)
+      .patch(`/api/v1/issues/${issueId}`)
+      .send({ title: "No auth" });
+    expect(response.status).toBe(401);
+  });
+});
+
+describe("POST /api/v1/issues/:issueId/close and /reopen", () => {
+  const app = createApp();
+  const runId = Date.now();
+  const memberEmail = `close-issue-member-${runId}@example.com`;
+  const outsiderEmail = `close-issue-outsider-${runId}@example.com`;
+  let memberToken: string;
+  let outsiderToken: string;
+  let issueId: string;
+
+  beforeAll(async () => {
+    const member = await signupAndLogin(app, memberEmail, "Close Issue Member");
+    memberToken = member.token;
+    const outsider = await signupAndLogin(app, outsiderEmail, "Close Issue Outsider");
+    outsiderToken = outsider.token;
+
+    const project = await request(app)
+      .post("/api/v1/projects")
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ name: "Close Issue Test Project" });
+
+    const issueResponse = await request(app)
+      .post(`/api/v1/projects/${project.body.project.id}/issues`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ title: "Close/reopen test issue" });
+    issueId = issueResponse.body.issue.id;
+  });
+
+  afterAll(async () => {
+    const emails = [memberEmail, outsiderEmail];
+    await prisma.project.deleteMany({ where: { owner: { email: { in: emails } } } });
+    await prisma.user.deleteMany({ where: { email: { in: emails } } });
+    await prisma.$disconnect();
+  });
+
+  it("closes an issue by setting status to DONE (ISS-05)", async () => {
+    const response = await request(app)
+      .post(`/api/v1/issues/${issueId}/close`)
+      .set("Authorization", `Bearer ${memberToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.issue.status).toBe("DONE");
+  });
+
+  it("is idempotent - closing an already-closed issue is a 200 no-op", async () => {
+    const response = await request(app)
+      .post(`/api/v1/issues/${issueId}/close`)
+      .set("Authorization", `Bearer ${memberToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.issue.status).toBe("DONE");
+  });
+
+  it("reopens an issue by setting status to BACKLOG (ISS-05)", async () => {
+    const response = await request(app)
+      .post(`/api/v1/issues/${issueId}/reopen`)
+      .set("Authorization", `Bearer ${memberToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.issue.status).toBe("BACKLOG");
+  });
+
+  it("is idempotent - reopening an already-open issue is a 200 no-op", async () => {
+    const response = await request(app)
+      .post(`/api/v1/issues/${issueId}/reopen`)
+      .set("Authorization", `Bearer ${memberToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.issue.status).toBe("BACKLOG");
+  });
+
+  it("returns 404 for someone with no membership in the issue's project on close (D-06)", async () => {
+    const response = await request(app)
+      .post(`/api/v1/issues/${issueId}/close`)
+      .set("Authorization", `Bearer ${outsiderToken}`);
+
+    expect(response.status).toBe(404);
+  });
+
+  it("requires authentication on close", async () => {
+    const response = await request(app).post(`/api/v1/issues/${issueId}/close`);
+    expect(response.status).toBe(401);
+  });
+
+  it("requires authentication on reopen", async () => {
+    const response = await request(app).post(`/api/v1/issues/${issueId}/reopen`);
+    expect(response.status).toBe(401);
+  });
+});
+
+describe("PATCH /api/v1/issues/:issueId/move", () => {
+  const app = createApp();
+  const runId = Date.now();
+  const memberEmail = `move-issue-member-${runId}@example.com`;
+  const outsiderEmail = `move-issue-outsider-${runId}@example.com`;
+  let memberToken: string;
+  let outsiderToken: string;
+  let projectId: string;
+  let cardAId: string;
+  let cardBId: string;
+  let cardCId: string;
+
+  beforeAll(async () => {
+    const member = await signupAndLogin(app, memberEmail, "Move Issue Member");
+    memberToken = member.token;
+    const outsider = await signupAndLogin(app, outsiderEmail, "Move Issue Outsider");
+    outsiderToken = outsider.token;
+
+    const project = await request(app)
+      .post("/api/v1/projects")
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ name: "Move Issue Test Project" });
+    projectId = project.body.project.id;
+
+    // Three BACKLOG cards, created in order: A, B, C.
+    const a = await request(app)
+      .post(`/api/v1/projects/${projectId}/issues`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ title: "Card A" });
+    cardAId = a.body.issue.id;
+    const b = await request(app)
+      .post(`/api/v1/projects/${projectId}/issues`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ title: "Card B" });
+    cardBId = b.body.issue.id;
+    const c = await request(app)
+      .post(`/api/v1/projects/${projectId}/issues`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ title: "Card C" });
+    cardCId = c.body.issue.id;
+  });
+
+  afterAll(async () => {
+    const emails = [memberEmail, outsiderEmail];
+    await prisma.project.deleteMany({ where: { owner: { email: { in: emails } } } });
+    await prisma.user.deleteMany({ where: { email: { in: emails } } });
+    await prisma.$disconnect();
+  });
+
+  interface BoardCard {
+    id: string;
+    title: string;
+    boardPlacement: { version: number };
+  }
+
+  async function getBoard(): Promise<Record<string, BoardCard[]>> {
+    const response = await request(app)
+      .get(`/api/v1/projects/${projectId}/board`)
+      .set("Authorization", `Bearer ${memberToken}`);
+    return response.body.board as Record<string, BoardCard[]>;
+  }
+
+  it("reorders card C between A and B within the same column", async () => {
+    const cardC = (await getBoard()).BACKLOG[2];
+    const response = await request(app)
+      .patch(`/api/v1/issues/${cardCId}/move`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({
+        prevIssueId: cardAId,
+        nextIssueId: cardBId,
+        version: cardC?.boardPlacement.version ?? 0,
+      });
+
+    expect(response.status).toBe(200);
+
+    const board = await getBoard();
+    const titles = board.BACKLOG.map((i) => i.title);
+    expect(titles).toEqual(["Card A", "Card C", "Card B"]);
+  });
+
+  it("moves a card into a different status column, updating status and position atomically", async () => {
+    const boardBefore = await getBoard();
+    const cardB = boardBefore.BACKLOG.find((i) => i.id === cardBId);
+
+    const response = await request(app)
+      .patch(`/api/v1/issues/${cardBId}/move`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ status: "TODO", version: cardB?.boardPlacement.version ?? 0 });
+
+    expect(response.status).toBe(200);
+    expect(response.body.issue.status).toBe("TODO");
+
+    const boardAfter = await getBoard();
+    expect(boardAfter.BACKLOG.map((i) => i.id)).not.toContain(cardBId);
+    expect(boardAfter.TODO.map((i) => i.id)).toContain(cardBId);
+  });
+
+  it("rejects a move with a stale version (optimistic concurrency)", async () => {
+    const response = await request(app)
+      .patch(`/api/v1/issues/${cardAId}/move`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ version: 999 });
+
+    expect(response.status).toBe(409);
+  });
+
+  it("leaves status untouched if the stale-version move is rejected (one transaction, D-20)", async () => {
+    const before = await request(app)
+      .get(`/api/v1/issues/${cardAId}`)
+      .set("Authorization", `Bearer ${memberToken}`);
+
+    await request(app)
+      .patch(`/api/v1/issues/${cardAId}/move`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ status: "DONE", version: 999 });
+
+    const after = await request(app)
+      .get(`/api/v1/issues/${cardAId}`)
+      .set("Authorization", `Bearer ${memberToken}`);
+
+    expect(after.body.issue.status).toBe(before.body.issue.status);
+  });
+
+  it("rejects a prevIssueId/nextIssueId that belongs to a different project", async () => {
+    const otherProject = await request(app)
+      .post("/api/v1/projects")
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ name: "A different project entirely" });
+    const otherIssue = await request(app)
+      .post(`/api/v1/projects/${otherProject.body.project.id}/issues`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ title: "Issue in a different project" });
+
+    const response = await request(app)
+      .patch(`/api/v1/issues/${cardAId}/move`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ prevIssueId: otherIssue.body.issue.id, version: 0 });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.fields.prevIssueId).toBeDefined();
+  });
+
+  it("returns 404 for someone with no membership in the issue's project (D-06)", async () => {
+    const response = await request(app)
+      .patch(`/api/v1/issues/${cardAId}/move`)
+      .set("Authorization", `Bearer ${outsiderToken}`)
+      .send({ version: 0 });
+
+    expect(response.status).toBe(404);
+  });
+
+  it("requires authentication", async () => {
+    const response = await request(app)
+      .patch(`/api/v1/issues/${cardAId}/move`)
+      .send({ version: 0 });
     expect(response.status).toBe(401);
   });
 });

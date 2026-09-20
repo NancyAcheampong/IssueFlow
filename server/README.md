@@ -33,22 +33,34 @@ Error responses always use one envelope shape (spec API-03):
 
 ## API routes implemented so far
 
-| Method | Path | Access | Notes |
-|---|---|---|---|
-| GET | `/health` | Public | Liveness only, no dependencies checked |
-| GET | `/api/v1/status` | Public | Readiness — also checks the database |
-| POST | `/api/v1/auth/signup` | Public | AUTH-01. Does **not** issue a JWT — signup and login are deliberately separate steps; call login next. |
-| POST | `/api/v1/auth/login` | Public | AUTH-02. Verifies credentials, returns `{ user, token }`. Wrong password and unknown email return the identical error (AUTH-07 — no account enumeration). |
-| GET | `/api/v1/me` | **Authenticated** | AUTH-04. First protected route — requires `Authorization: Bearer <token>`, via `requireAuth` middleware. |
-| POST | `/api/v1/projects` | **Authenticated** | PRJ-01. Creator becomes owner + first member (two rows written atomically — see DECISIONS.md D-11). |
-| GET | `/api/v1/projects` | **Authenticated** | PRJ-02. Only projects the requester belongs to. |
-| POST | `/api/v1/projects/:projectId/members` | **Owner only** | PRJ-03. Non-member → 404; member-but-not-owner → 403 (see DECISIONS.md D-06). |
-| DELETE | `/api/v1/projects/:projectId/members/:userId` | **Owner only** | PRJ-04. Owner can't remove themselves (400); removing a non-member is 404. |
-| PATCH | `/api/v1/projects/:projectId` | **Owner only** | PRJ-05. Partial update of name/description; empty string clears description; empty patch is rejected. |
-| POST | `/api/v1/projects/:projectId/issues` | **Member** | ISS-01. Any project member (not owner-only). Creates the `Issue` + its `BoardPlacement` together; assignee must be a current project member (ASN-02). |
-| GET | `/api/v1/projects/:projectId/issues` | **Member** | Plain list, ordered by issue number. Search/filters (Phase 6) and pagination (ISS-07) not yet implemented. |
-| GET | `/api/v1/issues/:issueId` | **Member** | ISS-03. Not nested under `/projects` — authorization looks the issue up first, then checks membership in *its* project (D-06 applies the same way). |
-| PATCH | `/api/v1/issues/:issueId` | **Member** | ISS-04. Partial update of title/description/assignee (member-level, not owner-only). Empty string clears description; `null` unassigns; reassigning re-validates project membership (ASN-02); empty patch is rejected. Status transitions and labels are out of scope — see DECISIONS.md D-13. |
+| Method | Path                                          | Access            | Notes                                                                                                                                                                                                                                                                                                            |
+| ------ | --------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/health`                                     | Public            | Liveness only, no dependencies checked                                                                                                                                                                                                                                                                           |
+| GET    | `/api/v1/status`                              | Public            | Readiness — also checks the database                                                                                                                                                                                                                                                                             |
+| POST   | `/api/v1/auth/signup`                         | Public            | AUTH-01. Does **not** issue a JWT — signup and login are deliberately separate steps; call login next.                                                                                                                                                                                                           |
+| POST   | `/api/v1/auth/login`                          | Public            | AUTH-02. Verifies credentials, returns `{ user, token }`. Wrong password and unknown email return the identical error (AUTH-07 — no account enumeration).                                                                                                                                                        |
+| GET    | `/api/v1/me`                                  | **Authenticated** | AUTH-04. First protected route — requires `Authorization: Bearer <token>`, via `requireAuth` middleware.                                                                                                                                                                                                         |
+| POST   | `/api/v1/projects`                            | **Authenticated** | PRJ-01. Creator becomes owner + first member (two rows written atomically — see DECISIONS.md D-11).                                                                                                                                                                                                              |
+| GET    | `/api/v1/projects`                            | **Authenticated** | PRJ-02. Only projects the requester belongs to.                                                                                                                                                                                                                                                                  |
+| POST   | `/api/v1/projects/:projectId/members`         | **Owner only**    | PRJ-03. Non-member → 404; member-but-not-owner → 403 (see DECISIONS.md D-06).                                                                                                                                                                                                                                    |
+| DELETE | `/api/v1/projects/:projectId/members/:userId` | **Owner only**    | PRJ-04. Owner can't remove themselves (400); removing a non-member is 404.                                                                                                                                                                                                                                       |
+| PATCH  | `/api/v1/projects/:projectId`                 | **Owner only**    | PRJ-05. Partial update of name/description; empty string clears description; empty patch is rejected.                                                                                                                                                                                                            |
+| POST   | `/api/v1/projects/:projectId/issues`          | **Member**        | ISS-01. Any project member (not owner-only). Creates the `Issue` + its `BoardPlacement` together; assignee must be a current project member (ASN-02).                                                                                                                                                            |
+| GET    | `/api/v1/projects/:projectId/issues`          | **Member**        | ISS-07. Ordered by issue number, offset-paginated (`?page=&pageSize=`, defaults 1/25, `pageSize` capped at 100). Response includes a `pagination` object. Keyword search/filters are still Phase 6.                                                                                                              |
+| GET    | `/api/v1/issues/:issueId`                     | **Member**        | ISS-03. Not nested under `/projects` — authorization looks the issue up first, then checks membership in _its_ project (D-06 applies the same way).                                                                                                                                                              |
+| PATCH  | `/api/v1/issues/:issueId`                     | **Member**        | ISS-04. Partial update of title/description/assignee (member-level, not owner-only). Empty string clears description; `null` unassigns; reassigning re-validates project membership (ASN-02); empty patch is rejected. Status transitions and labels are out of scope — see DECISIONS.md D-13.                   |
+| POST   | `/api/v1/issues/:issueId/close`               | **Member**        | ISS-05. Sets status to `DONE`. Idempotent — closing an already-closed issue is a 200 no-op. See DECISIONS.md D-14.                                                                                                                                                                                               |
+| POST   | `/api/v1/issues/:issueId/reopen`              | **Member**        | ISS-05. Sets status to `BACKLOG` (not whatever it was before closing — no history is tracked). Idempotent.                                                                                                                                                                                                       |
+| POST   | `/api/v1/issues/:issueId/comments`            | **Member**        | COM-01/02/03. Markdown body, rendered + sanitized to `bodyHtml` at write time (D-15); optional `parentId` for a threaded reply, must belong to the same issue (D-16); `@mentions` resolved against current project members only (D-17).                                                                          |
+| GET    | `/api/v1/issues/:issueId/comments`            | **Member**        | Flat list, oldest first — client builds any thread tree from `parentId`.                                                                                                                                                                                                                                         |
+| POST   | `/api/v1/projects/:projectId/labels`          | **Member**        | LBL-01. Name + hex color (`#rrggbb`); unique per `(projectId, name)`.                                                                                                                                                                                                                                            |
+| GET    | `/api/v1/projects/:projectId/labels`          | **Member**        | Alphabetical by name.                                                                                                                                                                                                                                                                                            |
+| DELETE | `/api/v1/projects/:projectId/labels/:labelId` | **Member**        | 404 if the label doesn't belong to this project.                                                                                                                                                                                                                                                                 |
+| POST   | `/api/v1/issues/:issueId/labels`              | **Member**        | LBL-02. Body `{ labelId }`. 400 if the label belongs to a _different_ project (cross-project reference rejected); 409 if already attached. Returns the issue's full label list.                                                                                                                                  |
+| GET    | `/api/v1/issues/:issueId/labels`              | **Member**        | Labels currently on this issue, alphabetical.                                                                                                                                                                                                                                                                    |
+| DELETE | `/api/v1/issues/:issueId/labels/:labelId`     | **Member**        | 404 if that label isn't currently attached to this issue.                                                                                                                                                                                                                                                        |
+| GET    | `/api/v1/projects/:projectId/board`           | **Member**        | Every issue in the project, grouped by status column, ordered within each column by its `BoardPlacement.rank` (fractional/lexicographic — D-19).                                                                                                                                                                 |
+| PATCH  | `/api/v1/issues/:issueId/move`                | **Member**        | Phase 4/D-20. Body `{ status?, prevIssueId?, nextIssueId?, version }`. Status + rank change together in one transaction; `version` guards optimistic concurrency — a stale value is rejected with 409 and nothing (status included) is written. A `prevIssueId`/`nextIssueId` from a different project is a 400. |
 
 Full reference contract lives in the product spec, §8.
 
@@ -101,7 +113,7 @@ A few real gotchas hit during development, worth knowing before you hit them too
   Code's TS server caches diagnostics and doesn't always notice
   `npm install` finishing or files changing on disk. Try
   `Cmd/Ctrl+Shift+P` → "Developer: Reload Window" first. If errors
-  about a *specific package* ("Cannot find module 'x'") persist after
+  about a _specific package_ ("Cannot find module 'x'") persist after
   that, confirm dependencies are actually installed — see the next point.
 - **`npx tsc` offers to install a package called `tsc@x.x.x`.** That's
   not the real TypeScript compiler — it means npm can't find
@@ -110,7 +122,7 @@ A few real gotchas hit during development, worth knowing before you hit them too
   it, `cd server`, confirm `node_modules/` actually exists here
   (`ls`), and re-run `npm install` if it doesn't.
 - **A dependency install command run from the wrong folder.** Always
-  run `npm install`/`npm install <pkg>` from *inside* `server/`, never
+  run `npm install`/`npm install <pkg>` from _inside_ `server/`, never
   from the repo root — there's no Node project at the root, and
   running it there creates a stray, unwanted `package.json` there
   instead.
@@ -119,7 +131,7 @@ A few real gotchas hit during development, worth knowing before you hit them too
   create its temporary shadow database — see "Database migrations"
   below for the one-time fix.
 - **`PrismaClientInitializationError: Can't reach database server at
-  localhost:5432`.** Different from every error above — this one
+localhost:5432`.** Different from every error above — this one
   means the Prisma Client itself is fine, it's Postgres that isn't
   running. Start it (`docker compose -f ../docker-compose.yml up -d`,
   or `pg_lsclusters` / `sudo service postgresql start` if using a
@@ -146,14 +158,14 @@ A few real gotchas hit during development, worth knowing before you hit them too
 
 See `.env.example` for the full list with comments. Summary:
 
-| Variable | Purpose |
-|---|---|
-| `PORT` | Port the HTTP server listens on |
-| `DATABASE_URL` | Postgres connection string (Prisma format) |
-| `JWT_SECRET` | Signing secret for auth tokens (Phase 1) |
-| `JWT_EXPIRES_IN` | Access token lifetime |
+| Variable         | Purpose                                                  |
+| ---------------- | -------------------------------------------------------- |
+| `PORT`           | Port the HTTP server listens on                          |
+| `DATABASE_URL`   | Postgres connection string (Prisma format)               |
+| `JWT_SECRET`     | Signing secret for auth tokens (Phase 1)                 |
+| `JWT_EXPIRES_IN` | Access token lifetime                                    |
 | `ALLOWED_ORIGIN` | Comma-separated list of frontend origins allowed by CORS |
-| `LOG_LEVEL` | pino log level |
+| `LOG_LEVEL`      | pino log level                                           |
 
 ## Tests
 
@@ -163,6 +175,7 @@ npm run test:watch
 ```
 
 Current coverage:
+
 - `tests/health.test.ts` — liveness endpoint, and the 404 error envelope
 - `tests/errorHandler.test.ts` — unit tests for `errorHandler`/`notFoundHandler`
   directly (AppError formatting, ZodError formatting, the generic 500
@@ -208,8 +221,55 @@ Current coverage:
   explicit `null` unassigns; an explicit `""` clears the description;
   an invalid/non-member assignee is rejected (ASN-02); an empty title
   and a wholly empty patch are both rejected; a non-member gets 404
-  (D-06); unauthenticated gets 401. Every route's D-06 split (404 for a
-  non-member) is exercised, not just asserted.
+  (D-06); unauthenticated gets 401. Close/reopen (ISS-05): closes sets
+  status to `DONE`, reopen sets it back to `BACKLOG`, both proven
+  idempotent (repeating either is a 200 no-op), D-06 and 401 covered.
+  Pagination (ISS-07): default page/pageSize and accurate metadata,
+  explicit page/pageSize actually slices the right rows, an invalid
+  page and an over-cap pageSize are both rejected. Every route's D-06
+  split (404 for a non-member) is exercised, not just asserted.
+- `tests/comments.test.ts` — the comments surface through the real HTTP
+  app. Create: a member can post a top-level comment and gets back both
+  the raw Markdown and its rendered `bodyHtml`; an empty body is
+  rejected; a non-member gets 404 (D-06); unauthenticated gets 401.
+  Threading (D-16): a reply resolves via `parentId`; a nonexistent
+  parentId and a parentId belonging to a _different_ issue are both
+  rejected. XSS (D-15): a raw `<script>` tag, an `onerror` handler on
+  an `<img>`, and a `javascript:` URL in a Markdown link are all
+  confirmed absent from the stored `bodyHtml`, an `<iframe>` is
+  stripped entirely, and a plain `https://` link is confirmed to
+  survive intact (sanitization isn't just "strip everything"). Mentions
+  (D-17): a token matching a current project member's email
+  local-part resolves to a real `CommentMention` row; an unmatched
+  token is silently dropped; a token matching someone _outside_ the
+  project does not resolve (the D-06 boundary extended to mentions).
+  List: oldest-first ordering, D-06, and 401 all covered.
+- `tests/labels.test.ts` — labels through the real HTTP app. Project
+  CRUD (LBL-01): a member can create a label, an invalid hex color and
+  a duplicate name (within the same project) are both rejected, list
+  and delete both work, a non-member gets 404, deleting an id that
+  isn't actually in this project is 404. Issue attachment (LBL-02): a
+  label from the issue's own project attaches cleanly; a label
+  belonging to a _different_ project is rejected (the Phase 3 exit
+  gate's "cross-project references are rejected," proven the same way
+  ASN-02 and COM-03 are); attaching the same label twice is 409; list
+  and detach both work; detaching something not currently attached is
+  404; D-06 and 401 covered.
+- `tests/board.test.ts` — the board endpoint through the real HTTP app:
+  issues actually land in the right status column; three BACKLOG cards
+  created in order come back in that same order (D-19's "new cards
+  rank after the last one in their column"); a card created straight
+  into TODO proves columns rank independently of each other; each
+  card's `boardPlacement` (rank, version) comes through; D-06 and 401
+  covered.
+- Move card (D-20, `tests/issues.test.ts`): reordering within a column
+  actually changes the board's returned order (verified via the board
+  endpoint, not just the move response); moving to a different column
+  updates status and position together; a stale `version` is rejected
+  with 409, and — the point of doing this in one transaction — a
+  rejected move leaves status completely untouched even when the
+  request also asked to change it; a neighbor card from a different
+  project is a 400; D-06 and 401 covered.
 - `tests/projects.test.ts` — the whole projects surface through the real
   HTTP app, with genuinely separate user accounts throughout: create
   confirms a real `ProjectMembership` row (not just the response shape);
@@ -261,7 +321,7 @@ whatever's already correct.
 with local Postgres at all (multiple Postgres installs fighting over port
 5432 is a real, common failure mode - see Troubleshooting), copy
 `.env.test.example` to `.env.test` and set `DATABASE_URL` there to a
-*separate* database/branch on your hosted provider. `tests/setup.ts`
+_separate_ database/branch on your hosted provider. `tests/setup.ts`
 loads it automatically if present, and falls back to the local default
 above if not — nothing else changes. Two things specific to Neon:
 connection strings need `?sslmode=require`, and migrations

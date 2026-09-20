@@ -29,10 +29,12 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  ownedProjects   Project[]           @relation("ProjectOwner")
-  memberships     ProjectMembership[]
-  authoredIssues  Issue[]             @relation("IssueAuthor")
-  assignedIssues  Issue[]             @relation("IssueAssignee")
+  ownedProjects    Project[]           @relation("ProjectOwner")
+  memberships      ProjectMembership[]
+  authoredIssues   Issue[]             @relation("IssueAuthor")
+  assignedIssues   Issue[]             @relation("IssueAssignee")
+  authoredComments Comment[]           @relation("CommentAuthor")
+  commentMentions  CommentMention[]
 
   @@map("users")
 }
@@ -64,6 +66,7 @@ model Project {
   memberships     ProjectMembership[]
   issues          Issue[]
   boardPlacements BoardPlacement[]
+  labels          Label[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -148,6 +151,9 @@ model Issue {
   // D-11). The `?` here is a Prisma limitation, not a real possibility.
   boardPlacement BoardPlacement?
 
+  comments Comment[]
+  labels   IssueLabel[]
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -186,4 +192,91 @@ model BoardPlacement {
 
   @@index([projectId, rank])
   @@map("board_placements")
+}
+
+// COM-01/COM-02: a discussion post on an issue, and its own replies
+// (threaded, via a self-relation). `bodyMarkdown` is exactly what the
+// author submitted; `bodyHtml` is the sanitized HTML rendering of it,
+// computed once at write time (see DECISIONS.md D-15 for the
+// marked+sanitize-html choice and why rendering happens server-side,
+// at creation, rather than on every read or client-side). Comments
+// aren't editable yet (no scheduled day for it up to Phase 3's exit
+// gate), so a stored, not recomputed-per-request, HTML rendering can't
+// go stale - if editing arrives later, that's the moment `bodyHtml`
+// needs to be recomputed on update too, not before.
+model Comment {
+  id           String   @id @default(cuid())
+  issueId      String   @map("issue_id")
+  authorId     String   @map("author_id")
+  // COM-03: a reply's parent must be a comment on the *same* issue -
+  // enforced in the service layer (a foreign key alone can't express
+  // "and also matches this other row's issueId"), not here.
+  parentId     String?  @map("parent_id")
+  bodyMarkdown String   @map("body_markdown")
+  bodyHtml     String   @map("body_html")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  issue  Issue   @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  author User    @relation("CommentAuthor", fields: [authorId], references: [id])
+  // Deleting a parent comment cascades to its replies - an orphaned
+  // reply with no parent to thread under isn't a state worth keeping
+  // around; Comment has no independent meaning once its own thread
+  // context is gone (mirrors the reasoning on ProjectMembership above).
+  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies Comment[] @relation("CommentReplies")
+
+  mentions CommentMention[]
+
+  @@index([issueId, createdAt])
+  @@map("comments")
+}
+
+// MEN-01: who a comment @mentions, resolved to real project members at
+// write time (see issues.service.ts-style resolution in
+// comments.service.ts) - not a live parse of the markdown on every
+// read. A pure join table, same reasoning as ProjectMembership/
+// IssueLabel: the (commentId, userId) pair is the whole fact.
+model CommentMention {
+  commentId String @map("comment_id")
+  userId    String @map("user_id")
+
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([commentId, userId])
+  @@map("comment_mentions")
+}
+
+// LBL-01: a project-scoped classification tag. Unique per (projectId,
+// name) - "bug" in Project A and "bug" in Project B are unrelated
+// labels, but the same name can't be defined twice within one project.
+model Label {
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  name      String
+  // Hex color (e.g. "#d73a4a", GitHub's own default palette convention)
+  // - validated in the Zod schema, not here; Postgres has no native hex
+  // check constraint worth reaching for over an application-level one.
+  color     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issues  IssueLabel[]
+
+  @@unique([projectId, name])
+  @@map("labels")
+}
+
+// Pure join table, same shape as ProjectMembership: the (issueId,
+// labelId) pair is the entire fact, no separate `id` needed.
+model IssueLabel {
+  issueId String @map("issue_id")
+  labelId String @map("label_id")
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  label Label @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([issueId, labelId])
+  @@map("issue_labels")
 }

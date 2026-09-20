@@ -9,6 +9,9 @@ import { authRouter } from "./modules/auth/auth.routes.js";
 import { usersRouter } from "./modules/users/users.routes.js";
 import { projectsRouter } from "./modules/projects/projects.routes.js";
 import { issuesRouter, issueRouter } from "./modules/issues/issues.routes.js";
+import { commentsRouter } from "./modules/comments/comments.routes.js";
+import { projectLabelsRouter, issueLabelsRouter } from "./modules/labels/labels.routes.js";
+import { boardRouter } from "./modules/board/board.routes.js";
 import { notFoundHandler, errorHandler } from "./middleware/errorHandler.js";
 
 export function createApp(): Express {
@@ -41,9 +44,13 @@ export function createApp(): Express {
   app.use("/api/v1/projects", projectsRouter);
   app.use("/api/v1/projects", issuesRouter);
   app.use("/api/v1/issues", issueRouter);
+  app.use("/api/v1/issues", commentsRouter);
+  app.use("/api/v1/projects", projectLabelsRouter);
+  app.use("/api/v1/issues", issueLabelsRouter);
+  app.use("/api/v1/projects", boardRouter);
 
-  // Future routers (comments, labels, board, search) get mounted here
-  // in later phases, all under /api/v1.
+  // Future routers (search) get mounted here in later phases, all
+  // under /api/v1.
 
   app.use(notFoundHandler);
   app.use(errorHandler);

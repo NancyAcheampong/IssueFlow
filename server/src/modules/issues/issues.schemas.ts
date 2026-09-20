@@ -39,8 +39,46 @@ export const updateIssueSchema = z
     description: z.string().trim().max(20000, "Description is too long.").optional(),
     assigneeId: z.string().trim().min(1, "Invalid assignee id.").nullable().optional(),
   })
-  .refine((data) => data.title !== undefined || data.description !== undefined || data.assigneeId !== undefined, {
-    message: "Provide at least one field to update.",
-  });
+  .refine(
+    (data) =>
+      data.title !== undefined || data.description !== undefined || data.assigneeId !== undefined,
+    {
+      message: "Provide at least one field to update.",
+    },
+  );
 
 export type UpdateIssueInput = z.infer<typeof updateIssueSchema>;
+
+// ISS-07: pagination on the issue list. Query params arrive as strings
+// (Express doesn't coerce), so this coerces and bounds them - a
+// pageSize above 100 is clamped rather than rejected outright, since a
+// caller asking for "everything" isn't a malformed request, just one
+// we cap for our own protection.
+export const listIssuesQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).optional().default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).optional().default(25),
+});
+
+export type ListIssuesQuery = z.infer<typeof listIssuesQuerySchema>;
+
+// Phase 4/D-19: moves a card - optionally into a different status
+// column, and/or to a new position within its (destination) column.
+// Position is expressed the way a drag-and-drop UI naturally has it:
+// "this card now sits between prevIssueId and nextIssueId" - not a
+// raw rank string, which is an implementation detail the client
+// shouldn't need to know how to generate. Either neighbor may be
+// omitted/null for "top of column" / "bottom of column".
+//
+// `version` is required, not optional: this is the whole point of
+// optimistic concurrency (D-20) - the client states which version of
+// the card's placement it's updating from, and the move is rejected
+// (409) if that's stale, rather than silently overwriting a
+// concurrent move.
+export const moveIssueSchema = z.object({
+  status: z.enum(issueStatusValues).optional(),
+  prevIssueId: z.string().trim().min(1, "Invalid prevIssueId.").nullable().optional(),
+  nextIssueId: z.string().trim().min(1, "Invalid nextIssueId.").nullable().optional(),
+  version: z.number().int().nonnegative(),
+});
+
+export type MoveIssueInput = z.infer<typeof moveIssueSchema>;
