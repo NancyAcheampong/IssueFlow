@@ -12,23 +12,24 @@ phase, per the roadmap in that spec.
 
 ```
 server/   Node.js + Express + TypeScript REST API and WebSocket gateway, PostgreSQL via Prisma
-client/   Frontend - not started yet (framework choice is a Phase 4 decision, not made yet)
+client/   React + Vite + TypeScript frontend (D-21)
 ```
 
 ## Status
 
-**Backend: Phases 1-4's server-side work complete** through the Kanban
-board's `move` endpoint — auth, projects, issues (create/edit/close/
-reopen/paginate), comments (with threading, Markdown sanitization, and
-`@mentions`), labels, and the board itself (fractional-indexed ranking,
-atomic status+position moves with optimistic concurrency) all work end
-to end, verified by 139 automated tests. **No frontend exists yet** —
-Phase 4's remaining days (drag-and-drop wiring, optimistic-update
-rollback, keyboard-accessible move) need an actual client application
-first, which is a real foundational decision (framework, build tooling,
-DnD library) rather than more of the same backend work. Next: pick that
-stack and start `client/`.
+**Phase 4 (Kanban board) complete, backend and frontend.** The whole
+pipeline works end to end: sign up, log in, create a project, create
+issues, see them on a real Kanban board, and move them between columns
+either by dragging a card or via an explicit keyboard-accessible "Move
+to" control (D-22) — both paths share one move operation with
+optimistic updates and rollback on failure (D-23), backed by the
+server's fractional-indexed ranking and atomic status+position moves
+(D-19/D-20). Verified by 139 backend tests, 14 frontend tests, and a
+full live browser session (signup through drag-and-drop, the keyboard
+control, and a forced-failure rollback) against a running server.
 
-See `server/README.md` for how to run the API locally, and
-[`DECISIONS.md`](./DECISIONS.md) for the technical decisions made so far
-and why.
+Phase 5 (real-time layer) is next, per the original roadmap.
+
+See `server/README.md` and `client/README.md` for how to run each
+piece locally, and [`DECISIONS.md`](./DECISIONS.md) for the technical
+decisions made so far and why.

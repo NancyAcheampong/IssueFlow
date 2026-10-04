@@ -1,0 +1,162 @@
+:root {
+  color-scheme: light;
+  font-family: system-ui, sans-serif;
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --border: #d9dce1;
+  --text: #1c2026;
+  --text-muted: #5b6270;
+  --accent: #2f6feb;
+  --danger: #c23a3a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+a {
+  color: var(--accent);
+}
+
+button {
+  cursor: pointer;
+}
+
+[role="alert"] {
+  color: var(--danger);
+}
+
+.auth-page,
+.projects-page {
+  max-width: 28rem;
+  margin: 3rem auto;
+  padding: 0 1rem;
+}
+
+.auth-page form,
+.new-project-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.new-project-form {
+  flex-direction: row;
+  margin: 1rem 0;
+}
+
+.field-error {
+  display: block;
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
+.project-list {
+  list-style: none;
+  padding: 0;
+}
+
+.project-list li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Board */
+
+.board-page {
+  padding: 1rem;
+  max-width: 100%;
+}
+
+.board-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.new-issue-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.board-error {
+  background: #fdecec;
+  border: 1px solid var(--danger);
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+}
+
+.board-columns {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  padding-bottom: 1rem;
+}
+
+.column {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  min-width: 16rem;
+  flex: 1 1 16rem;
+}
+
+.column h2 {
+  font-size: 0.95rem;
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 0.5rem;
+}
+
+.column-count {
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
+.column-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 2rem;
+}
+
+.card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  padding: 0.5rem 0.65rem;
+  cursor: grab;
+}
+
+.card-title {
+  margin: 0 0 0.25rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.card-description {
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.card-move {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}

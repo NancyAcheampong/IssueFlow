@@ -403,4 +403,93 @@ request arrives.
 
 ---
 
-_Last updated: Phase 4 batch, Sep 15-16 (ranking decision + get-board through move-card — see git log for the day-by-day breakdown)._
+## D-21 (local) — Frontend stack: React + Vite + TypeScript, no meta-framework
+
+**Decision:** `client/` is React 19 + Vite + TypeScript, scaffolded via
+Vite's own `react-ts` template, with `react-router-dom` for routing,
+`@dnd-kit/core`/`@dnd-kit/sortable` for drag-and-drop, and Vitest +
+`@testing-library/react` for tests (same test runner as the server, a
+separate `vite.config.ts`/`vitest.config.ts` split to dodge a real
+`vite`-vs-`vitest/config` type-duplication issue - see the comment in
+`vitest.config.ts`).
+
+**Why:** this is a single authenticated app behind a REST API, not a
+site needing SSR/SEO - a meta-framework (Next.js, Remix) would add
+routing/data-fetching conventions this project doesn't need and a
+deployment model more complex than "static files + an API." TypeScript
+matches the backend, keeping one language across the stack. `@dnd-kit`
+over `react-beautiful-dnd` (unmaintained) or native HTML5 drag-and-drop
+(weak touch support, no real accessibility story) - dnd-kit ships a
+keyboard sensor as a first-class citizen, which D-22 depends on
+directly.
+
+**Rejected:** picking this by committee/survey. The user explicitly
+deferred the choice ("you choose, go build it") rather than being
+asked to weigh in on framework minutiae - the stack is still recorded
+here, with reasoning, exactly as any other architectural decision in
+this document would be, so it's inspectable and revisitable even
+though no back-and-forth happened before it was made.
+
+## D-22 (local) — Board move: two independent trigger paths, one shared operation
+
+**Decision:** a card can be moved two ways - dragging it (pointer, via
+`@dnd-kit`'s `PointerSensor`) or an explicit "Move to" `<select>` on
+every card (a plain native form control). Both call the exact same
+`moveCard` function (`useBoard.ts`), which itself calls the exact same
+`computeMove`/`resolveDropTarget` pure logic (`boardLogic.ts`) and the
+exact same `PATCH .../move` endpoint (D-20). `@dnd-kit`'s own
+`KeyboardSensor` is also wired up (arrow-key reordering within a
+column), but the `<select>` is the primary accessible path for moving
+*between* columns - dnd-kit's keyboard sensor across multiple
+containers is a meaningfully harder gesture to discover and operate
+than choosing an option from a dropdown.
+
+**Why:** ISS-19/Sep 19's "keyboard-accessible move action" needed to be
+a *real*, independently-operable path - not a hope that dnd-kit's
+keyboard sensor alone would be sufficient for cross-column moves, which
+it technically supports but isn't a comparably easy gesture to a mouse
+drag. A plain `<select>` is unambiguous: any screen reader, any input
+device, zero gesture choreography. Routing both paths through the one
+`moveCard` function (rather than two separate move implementations)
+means there's exactly one place optimistic update + rollback (D-23,
+directly below) and version/concurrency handling
+live - no risk of the two paths drifting apart in behavior.
+
+**Verified live**, not just via the committed unit tests: a full
+browser session (Playwright, one-off, not committed - see
+`client/README.md`) drove signup through project/issue creation, a
+real pointer drag moving a card between columns, the `<select>`
+moving a different card, and confirmed both moves survived a full
+page reload (proving they round-tripped through the real API, not
+just local state).
+
+## D-23 (local) — Optimistic move with snapshot-based rollback
+
+**Decision:** `useBoard`'s `moveCard` applies a move to local state
+immediately (optimistic), then calls the API. On success, the
+server's authoritative response (crucially, its new
+`BoardPlacement.version`) replaces the optimistic guess. On failure
+(network error, or the 409 from D-20's optimistic-concurrency check),
+the board is restored to the *exact snapshot taken before the move
+started* - not a piecemeal attempt to undo just the one field that
+changed.
+
+**Why:** optimistic UI is what makes drag-and-drop feel instant rather
+than laggy, but it's a lie until the server confirms it - the
+rollback path is what keeps that lie honest. Reverting to a full
+snapshot (not trying to compute "what would undo this specific change")
+is deliberately the dumb, obviously-correct option: by the time a move
+fails, the optimistic state might already be wrong in ways beyond just
+the one card that moved (another concurrent move could have landed in
+between), and a snapshot taken immediately before touching anything is
+the one state this code can actually vouch for being accurate.
+
+**Verified** both at the unit level (`useBoard.test.ts`: a mocked
+rejected move rolls back to the pre-move board exactly, sends the
+correct pre-move `version`) and live (the Playwright session above
+forced a real 409 via request interception and confirmed the UI
+reverted *and* surfaced an error banner, not just one or the other).
+
+---
+
+_Last updated: Phase 4 batch, Sep 17-19 (frontend scaffold, drag-and-drop, rollback, keyboard-accessible move — see git log for the day-by-day breakdown)._
