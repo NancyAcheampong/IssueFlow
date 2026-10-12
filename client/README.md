@@ -146,7 +146,7 @@ Current coverage: `boardLogic.test.ts` (11 tests) proves the pure move
 math - correct neighbor computation, same-column reorder without
 duplicating/losing a card, out-of-range index clamping, and the
 off-by-one that excluding the dragged card from index calculation
-exists specifically to avoid. `useBoard.test.ts` (6 tests) proves the
+exists specifically to avoid. `useBoard.test.ts` (8 tests) proves the
 hook's actual behavior against a mocked API and a mocked socket: a
 successful move reconciles with the server's response (including the
 new `version`, which the *next* move depends on); a rejected move
@@ -158,7 +158,18 @@ correct pre-move `version` is sent for optimistic concurrency; a
 on unmount; filters pass through to `getBoard` unchanged; a *new
 object* with identical filter content does NOT trigger a refetch, but
 actually different content does (the stringify-as-dependency-key
-design, proven directly rather than just asserted).
+design, proven directly rather than just asserted). `AuthContext.test.tsx`
+(7 tests, added Oct 7 - this session logic had zero coverage until
+then) proves the actual session lifecycle: no stored token goes
+straight to anonymous without ever calling the API; a stored token is
+only trusted *after* `GET /me` confirms it (loading -> authenticated),
+never blindly; a token `GET /me` rejects is actively cleared from
+storage, not just ignored (otherwise the next load retries the same
+dead token forever); `login()` stores the new token and becomes
+authenticated; `signup()` genuinely chains into `login()` rather than
+expecting its own token back (AUTH-01 - the server never issues one
+from signup); `logout()` clears both storage and in-memory state;
+`useAuth()` throws outside an `AuthProvider`.
 
 Beyond the committed suite, the Oct 3 filter UI was verified live
 (same one-off Playwright reasoning as every other live verification in

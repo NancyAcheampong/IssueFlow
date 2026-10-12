@@ -635,4 +635,32 @@ checks already in place.
 
 ---
 
-_Last updated: Phase 7 batch, Oct 6 onward (security review — see git log for the day-by-day breakdown)._
+## D-28 (local) — Fixed a real gap: removing a member now unassigns their issues
+
+**Decision:** `removeMember` (PRJ-04) now clears `assigneeId` on every
+issue in the project currently assigned to the person being removed,
+in the same transaction as the membership deletion - `authorId` is
+left untouched.
+
+**Why this was a bug, not a style choice:** back in Phase 2, before
+`Issue`/`assigneeId` existed, `removeMember`'s own comment explicitly
+said this needed to happen "once Issue lands" - and then nobody came
+back to actually do it once Issue did land (Phase 2, later that same
+week) or once assignment did (ASN-02, also Phase 2). The result: a
+removed member could stay the live assignee of issues in a project
+they could no longer even see, which is ASN-02 ("assignee must be a
+current project member") silently failing to hold as an *ongoing*
+invariant - it was only ever checked at the moment an assignment was
+made, never re-verified when membership later changed. Found during
+the Oct 7 "fill in missing tests" pass by noticing the original
+comment was still sitting there, years (in spec-time) after the
+condition it was waiting for had already arrived.
+
+**Why one transaction:** without it, there's a window (however brief)
+where the membership row is gone but the issue still shows the removed
+person as assignee - exactly the kind of half-applied state D-20
+already established this codebase doesn't accept for board moves.
+
+---
+
+_Last updated: Phase 7 batch, Oct 6-7 (security review through fill-in-missing-tests — see git log for the day-by-day breakdown)._

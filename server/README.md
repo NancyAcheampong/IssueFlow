@@ -44,7 +44,7 @@ Error responses always use one envelope shape (spec API-03):
 | GET    | `/api/v1/projects`                            | **Authenticated** | PRJ-02. Only projects the requester belongs to.                                                                                                                                                                                                                                                                  |
 | POST   | `/api/v1/projects/:projectId/members`         | **Owner only**    | PRJ-03. Non-member → 404; member-but-not-owner → 403 (see DECISIONS.md D-06).                                                                                                                                                                                                                                    |
 | GET    | `/api/v1/projects/:projectId/members`         | **Member**        | PRJ-02b. Added for the Phase 6 assignee filter/picker — member-level (unlike add/remove), since the roster isn't sensitive to someone already on the project.                                                                                                                                                  |
-| DELETE | `/api/v1/projects/:projectId/members/:userId` | **Owner only**    | PRJ-04. Owner can't remove themselves (400); removing a non-member is 404.                                                                                                                                                                                                                                       |
+| DELETE | `/api/v1/projects/:projectId/members/:userId` | **Owner only**    | PRJ-04. Owner can't remove themselves (400); removing a non-member is 404. Also unassigns (not deletes) any issues currently assigned to the removed member, in the same transaction — D-28.                                                                                                                    |
 | PATCH  | `/api/v1/projects/:projectId`                 | **Owner only**    | PRJ-05. Partial update of name/description; empty string clears description; empty patch is rejected.                                                                                                                                                                                                            |
 | POST   | `/api/v1/projects/:projectId/issues`          | **Member**        | ISS-01. Any project member (not owner-only). Creates the `Issue` + its `BoardPlacement` together; assignee must be a current project member (ASN-02).                                                                                                                                                            |
 | GET    | `/api/v1/projects/:projectId/issues`          | **Member**        | ISS-07/SRC-01..03. Ordered by issue number, offset-paginated (`?page=&pageSize=`, defaults 1/25, `pageSize` capped at 100). `?search=` is a case-insensitive title/description substring match; `?status=`, `?assigneeId=`, `?labelId=` each take a comma-separated list (OR within one param, AND across different params — D-26). Response includes a `pagination` object whose `total` reflects the filtered count. |
@@ -355,7 +355,22 @@ Current coverage:
   Phase 6 for the assignee filter) confirms every member including the
   owner comes back with no `passwordHash` leaking through, and that
   it's member-level, not owner-only - a non-owner member can list the
-  roster too, unlike add/remove.
+  roster too, unlike add/remove; remove member also unassigns (D-28,
+  Oct 7) - an issue assigned to the removed member comes back with
+  `assigneeId: null` afterward, `authorId` stays untouched on a
+  different issue, and an issue assigned to someone *else* (the owner)
+  is confirmed unaffected, proving the unassignment is scoped to the
+  removed member specifically, not every issue in the project.
+- `tests/rank.test.ts` — direct unit tests of `rankBetween` (D-19),
+  added Oct 7 after noticing this foundational logic was only ever
+  exercised indirectly through HTTP-level board/move assertions: a
+  generated key sorts correctly between two given bounds; top-of-
+  column and bottom-of-column (one bound null) both work; an empty
+  column (both bounds null/undefined) produces a valid key; repeatedly
+  inserting at the bottom (what every new card does) stays in creation
+  order; repeatedly inserting into the same gap between two neighbors
+  (what several cards dropped into the same spot would do) stays
+  correctly ordered too.
 
 ## Database migrations
 

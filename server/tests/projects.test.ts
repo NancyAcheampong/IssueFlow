@@ -398,6 +398,89 @@ describe("DELETE /api/v1/projects/:projectId/members/:userId", () => {
   });
 });
 
+// Oct 7: a real gap flagged back in Phase 2 (see the comment history
+// on removeMember) and never actually revisited once Issue/assigneeId
+// existed - ASN-02 ("assignee must be a current project member") is
+// an ongoing invariant, not just a check at write time.
+describe("DELETE /api/v1/projects/:projectId/members/:userId - unassigns the member's issues", () => {
+  const app = createApp();
+  const runId = Date.now();
+  const ownerEmail = `remove-unassign-owner-${runId}@example.com`;
+  const memberEmail = `remove-unassign-target-${runId}@example.com`;
+  let ownerToken: string;
+  let ownerId: string;
+  let memberId: string;
+  let projectId: string;
+  let assignedIssueId: string;
+  let otherIssueId: string;
+
+  beforeAll(async () => {
+    const owner = await signupAndLogin(app, ownerEmail, "Remove Unassign Owner");
+    ownerToken = owner.token;
+    ownerId = owner.userId;
+    const member = await signupAndLogin(app, memberEmail, "Remove Unassign Target");
+    memberId = member.userId;
+
+    const project = await request(app)
+      .post("/api/v1/projects")
+      .set("Authorization", `Bearer ${ownerToken}`)
+      .send({ name: "Remove Unassign Test Project" });
+    projectId = project.body.project.id;
+
+    await request(app)
+      .post(`/api/v1/projects/${projectId}/members`)
+      .set("Authorization", `Bearer ${ownerToken}`)
+      .send({ email: memberEmail });
+
+    const assigned = await request(app)
+      .post(`/api/v1/projects/${projectId}/issues`)
+      .set("Authorization", `Bearer ${ownerToken}`)
+      .send({ title: "Assigned to the member being removed", assigneeId: memberId });
+    assignedIssueId = assigned.body.issue.id;
+
+    // A second issue, assigned to the *owner* (who isn't being
+    // removed) - proves the unassignment only targets the removed
+    // member's own assignments, not every issue in the project.
+    const other = await request(app)
+      .post(`/api/v1/projects/${projectId}/issues`)
+      .set("Authorization", `Bearer ${ownerToken}`)
+      .send({ title: "Assigned to someone else entirely", assigneeId: ownerId });
+    otherIssueId = other.body.issue.id;
+
+    await request(app)
+      .delete(`/api/v1/projects/${projectId}/members/${memberId}`)
+      .set("Authorization", `Bearer ${ownerToken}`);
+  });
+
+  afterAll(async () => {
+    const emails = [ownerEmail, memberEmail];
+    await prisma.project.deleteMany({ where: { owner: { email: { in: emails } } } });
+    await prisma.user.deleteMany({ where: { email: { in: emails } } });
+    await prisma.$disconnect();
+  });
+
+  it("clears assigneeId on the removed member's assigned issue", async () => {
+    const response = await request(app)
+      .get(`/api/v1/issues/${assignedIssueId}`)
+      .set("Authorization", `Bearer ${ownerToken}`);
+
+    expect(response.body.issue.assigneeId).toBeNull();
+  });
+
+  it("leaves authorId untouched - this is historical attribution, not live membership", async () => {
+    const issue = await prisma.issue.findUniqueOrThrow({ where: { id: assignedIssueId } });
+    expect(issue.authorId).not.toBeNull();
+  });
+
+  it("does not touch an issue assigned to someone other than the removed member", async () => {
+    const response = await request(app)
+      .get(`/api/v1/issues/${otherIssueId}`)
+      .set("Authorization", `Bearer ${ownerToken}`);
+
+    expect(response.body.issue.assigneeId).toBe(ownerId);
+  });
+});
+
 describe("PATCH /api/v1/projects/:projectId", () => {
   const app = createApp();
   const runId = Date.now();
