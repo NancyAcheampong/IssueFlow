@@ -160,3 +160,44 @@ button {
   font-size: 0.75rem;
   color: var(--text-muted);
 }
+
+/* Sep 21: responsive pass. Below this width there isn't room for
+   several ~16rem columns side by side plus a peek of the next one, so
+   the layout switches to "one column (mostly) at a time, swipe
+   sideways" - a standard mobile Kanban pattern (Trello's mobile web
+   does the same thing), rather than shrinking columns until their
+   contents become illegible. scroll-snap-* makes that swipe land on
+   a column boundary instead of leaving the user mid-column. */
+@media (max-width: 640px) {
+  .board-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .new-issue-form,
+  .new-project-form {
+    flex-direction: column;
+  }
+
+  .board-columns {
+    scroll-snap-type: x mandatory;
+  }
+
+  .column {
+    min-width: 85vw;
+    flex: 0 0 85vw;
+    scroll-snap-align: start;
+  }
+}
+
+/* Touch targets: 44px is the commonly-cited minimum comfortable size
+   (iOS HIG/WCAG 2.5.5) for anything tapped directly, independent of
+   screen width - a mouse pointer doesn't need it, a finger does. */
+@media (pointer: coarse) {
+  button,
+  select,
+  input {
+    min-height: 2.75rem;
+  }
+}
+

@@ -75,6 +75,20 @@ dev`) and its `ALLOWED_ORIGIN` to include this app's origin
   explicit "Move to" `<select>` - two ways to trigger the exact same
   move (D-22).
 
+## Responsive (Sep 21)
+
+Below 640px wide there isn't room for multiple ~16rem columns plus a
+peek of the next one, so the board switches to "one column (mostly) at
+a time, swipe sideways between columns" - the same pattern Trello's
+own mobile web uses - rather than shrinking columns until their
+contents stop being legible. `scroll-snap-type`/`scroll-snap-align`
+make that swipe land on a column boundary. Interactive elements get a
+larger minimum touch target (`@media (pointer: coarse)`, not a width
+breakpoint - a mouse doesn't need it, a finger does, independent of
+viewport size). Verified live with a throwaway Playwright script
+(same "not committed, not otherwise part of this toolchain" reasoning
+as the Sep 17-19 verification above) at 375px, 768px, and 1280px.
+
 ## Tests
 
 ```bash
