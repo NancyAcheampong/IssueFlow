@@ -155,6 +155,29 @@ for the Oct 8 accessibility pass.
 assignee/label checkboxes (the latter needed a new server endpoint,
 `GET /projects/:id/members` - see server/README.md PRJ-02b).
 
+## Project membership (Oct 12)
+
+`BoardPage`'s members panel is the frontend for PRJ-02b/03/04
+(`server/README.md`): every member sees the roster, and the owner
+additionally gets an "Invite by email" form and a "Remove" button per
+other member (the owner can't remove themselves - the server rejects
+it, but the client also just never renders that button on the owner's
+own row). This closed a real gap found during a pre-deploy pass: the
+server had fully supported adding/removing members since Phase 2, but
+no UI ever called it, so in practice every project could only ever
+have one person on it.
+
+There's no `GET /projects/:id` endpoint (see Known gaps below), so
+"am I the owner of this project" is derived client-side by refetching
+`GET /projects` (already small - one call per board load) and
+matching `ownerId` against the signed-in user's id, rather than adding
+new API surface just for this. Verified live with the same
+two-browser-context Playwright approach as the realtime section above:
+owner invites a second account by email, that account reaches the
+board immediately; duplicate invite and unknown-email invite both
+surface the server's real error message; owner removes the member,
+and the removed account is denied access on its next request.
+
 ## Tests
 
 ```bash

@@ -1,5 +1,13 @@
 import { apiRequest } from "./api";
-import type { Board, Issue, IssueFilters, IssueStatus, Label, Project, SafeUser } from "./types";
+import type {
+  Board,
+  Issue,
+  IssueFilters,
+  IssueStatus,
+  Label,
+  Project,
+  SafeUser,
+} from "./types";
 
 export function signup(email: string, displayName: string, password: string) {
   return apiRequest<{ user: SafeUser }>("/auth/signup", {
@@ -60,7 +68,11 @@ function filtersToQueryString(filters?: IssueFilters): string {
   return query ? `?${query}` : "";
 }
 
-export function getBoard(token: string, projectId: string, filters?: IssueFilters) {
+export function getBoard(
+  token: string,
+  projectId: string,
+  filters?: IssueFilters,
+) {
   return apiRequest<{ board: Board }>(
     `/projects/${projectId}/board${filtersToQueryString(filters)}`,
     { token },
@@ -103,6 +115,21 @@ export function listLabels(token: string, projectId: string) {
 
 export function listMembers(token: string, projectId: string) {
   return apiRequest<{ members: SafeUser[] }>(`/projects/${projectId}/members`, {
+    token,
+  });
+}
+
+export function addMember(token: string, projectId: string, email: string) {
+  return apiRequest<{ member: SafeUser }>(`/projects/${projectId}/members`, {
+    method: "POST",
+    token,
+    body: { email },
+  });
+}
+
+export function removeMember(token: string, projectId: string, userId: string) {
+  return apiRequest<null>(`/projects/${projectId}/members/${userId}`, {
+    method: "DELETE",
     token,
   });
 }

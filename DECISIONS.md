@@ -759,4 +759,48 @@ D-27's pass):
 
 ---
 
-_Last updated: Phase 7 batch, Oct 6-9 (security review through finalize-migrations-logging-CORS — see git log for the day-by-day breakdown)._
+## D-31 (local) — Oct 12: pre-deploy pass found a real gap — no UI ever called the member-invite API
+
+**Decision:** Added a members panel to `BoardPage` (client): every
+member sees the roster (`GET /projects/:id/members`, PRJ-02b,
+member-level); the owner additionally gets an "Invite by email" form
+(PRJ-03) and a "Remove" button per *other* member (PRJ-04 - the owner
+can't remove themselves, so that row never gets the button at all,
+matching what the server already rejects).
+
+**Why this was a bug, not a missing nice-to-have:** `addMember` /
+`listMembers` / `removeMember` have existed on the server since Phase
+2/7 (D-28), fully tested, fully authorized (D-06's 404-vs-403 split).
+Nothing in `client/src/pages` or `endpoints.ts` ever called
+`addMember` or `removeMember` - `ProjectsPage` and `BoardPage` simply
+never grew the UI for it. The practical effect: every project could
+only ever have exactly one person on it, in an app whose entire premise
+is a shared board. Found during a pre-deploy pass explicitly aimed at
+testing every step live rather than trusting the automated suites
+alone - the suites were (and still are) green, because nothing in them
+exercised the client UI's *coverage* of the server's API surface, only
+each side's own correctness in isolation.
+
+**Why `GET /projects` instead of a new `GET /projects/:id` endpoint:**
+"is the signed-in user this project's owner" is needed client-side to
+decide whether to render the invite form / remove buttons at all. No
+single-project fetch endpoint exists yet (tracked separately in
+`client/README.md` Known gaps, predating this). Re-fetching the
+already-small project list and matching `ownerId` client-side avoids
+adding new server surface for what's otherwise a one-field lookup -
+revisit if/when a real single-project page (e.g. a non-generic board
+`<h1>`) makes that endpoint worth adding for its own sake.
+
+**Verification:** live two-browser-context Playwright run (owner
+invites a second real account by email; that account reaches the
+board with no manual refresh; a duplicate invite and an invite to an
+unknown email both surface the server's actual error text; owner
+removes the member; the removed account is denied on its next
+request) - 19/19 checks passed, alongside a clean run of the full
+automated suite (185 server + 29 client tests, both builds, both
+lints). Not committed as a test file, same reasoning as the other
+one-off Playwright verifications in this file.
+
+---
+
+_Last updated: Oct 12 (pre-deploy live-testing pass — see git log)._

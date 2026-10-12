@@ -15,7 +15,15 @@ import { usePageTitle } from "../lib/usePageTitle";
 import { resolveDropTarget } from "../lib/boardLogic";
 import { ISSUE_STATUSES, STATUS_LABELS } from "../lib/types";
 import type { IssueFilters, IssueStatus, Label, SafeUser } from "../lib/types";
-import { createIssue, listLabels, listMembers } from "../lib/endpoints";
+import {
+  addMember,
+  createIssue,
+  listLabels,
+  listMembers,
+  listProjects,
+  removeMember,
+} from "../lib/endpoints";
+import { ApiError } from "../lib/api";
 import { Column } from "../components/Column";
 
 // SRC-01: 300ms - long enough to collapse a burst of keystrokes into
@@ -24,15 +32,22 @@ import { Column } from "../components/Column";
 const SEARCH_DEBOUNCE_MS = 300;
 
 function toggleValue<T>(list: T[], value: T): T[] {
-  return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
+  return list.includes(value)
+    ? list.filter((v) => v !== value)
+    : [...list, value];
 }
 
 export function BoardPage() {
   usePageTitle("Board");
   const { projectId } = useParams<{ projectId: string }>();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [newTitle, setNewTitle] = useState("");
   const [creating, setCreating] = useState(false);
+
+  const [isOwner, setIsOwner] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [memberError, setMemberError] = useState<string | null>(null);
 
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -43,7 +58,10 @@ export function BoardPage() {
   const [members, setMembers] = useState<SafeUser[]>([]);
 
   useEffect(() => {
-    const timeout = setTimeout(() => setDebouncedSearch(searchInput), SEARCH_DEBOUNCE_MS);
+    const timeout = setTimeout(
+      () => setDebouncedSearch(searchInput),
+      SEARCH_DEBOUNCE_MS,
+    );
     return () => clearTimeout(timeout);
   }, [searchInput]);
 
@@ -60,7 +78,19 @@ export function BoardPage() {
     listMembers(token, projectId)
       .then(({ members: fetched }) => setMembers(fetched))
       .catch(() => setMembers([]));
-  }, [token, projectId]);
+    // No GET /projects/:id endpoint exists yet (see client/README.md
+    // Known gaps) - reusing the already-fetched project list to find
+    // this one's ownerId avoids adding new API surface just to show/
+    // hide the invite/remove controls.
+    listProjects(token)
+      .then(({ projects }) => {
+        const project = projects.find(
+          (candidate) => candidate.id === projectId,
+        );
+        setIsOwner(Boolean(project && user && project.ownerId === user.id));
+      })
+      .catch(() => setIsOwner(false));
+  }, [token, projectId, user]);
 
   const filters: IssueFilters = {
     search: debouncedSearch.trim() || undefined,
@@ -69,7 +99,10 @@ export function BoardPage() {
     labelId: labelFilter.length > 0 ? labelFilter : undefined,
   };
   const hasActiveFilters =
-    Boolean(filters.search) || statusFilter.length > 0 || assigneeFilter.length > 0 || labelFilter.length > 0;
+    Boolean(filters.search) ||
+    statusFilter.length > 0 ||
+    assigneeFilter.length > 0 ||
+    labelFilter.length > 0;
 
   const { board, loading, error, moveCard, reload } = useBoard(
     token ?? "",
@@ -124,6 +157,47 @@ export function BoardPage() {
     }
   }
 
+  async function handleInvite(event: React.FormEvent) {
+    event.preventDefault();
+    if (!projectId || !token || !inviteEmail.trim()) {
+      return;
+    }
+    setInviting(true);
+    setMemberError(null);
+    try {
+      const { member } = await addMember(token, projectId, inviteEmail.trim());
+      setMembers((current) => [...current, member]);
+      setInviteEmail("");
+    } catch (err) {
+      setMemberError(
+        err instanceof ApiError ? err.message : "Failed to add member.",
+      );
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  async function handleRemoveMember(memberId: string) {
+    if (!projectId || !token) {
+      return;
+    }
+    setMemberError(null);
+    try {
+      await removeMember(token, projectId, memberId);
+      setMembers((current) =>
+        current.filter((member) => member.id !== memberId),
+      );
+      // A removed member may have been unassigned from issues
+      // (server-side, atomically - see projects.service.ts removeMember)
+      // - refetch so any now-unassigned cards reflect that.
+      reload();
+    } catch (err) {
+      setMemberError(
+        err instanceof ApiError ? err.message : "Failed to remove member.",
+      );
+    }
+  }
+
   function clearFilters() {
     setSearchInput("");
     setDebouncedSearch("");
@@ -169,6 +243,46 @@ export function BoardPage() {
         </form>
       </header>
 
+      <section className="members-panel" aria-label="Project members">
+        <h2>Members</h2>
+        <ul className="members-list">
+          {members.map((member) => (
+            <li key={member.id} className="member-row">
+              <span>
+                {member.displayName}{" "}
+                <span className="member-email">({member.email})</span>
+              </span>
+              {isOwner && member.id !== user?.id && (
+                <button
+                  type="button"
+                  onClick={() => void handleRemoveMember(member.id)}
+                >
+                  Remove
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+
+        {memberError && <p role="alert">{memberError}</p>}
+
+        {isOwner && (
+          <form onSubmit={handleInvite} className="invite-form">
+            <label htmlFor="invite-email">Invite by email</label>
+            <input
+              id="invite-email"
+              type="email"
+              value={inviteEmail}
+              onChange={(event) => setInviteEmail(event.target.value)}
+              placeholder="teammate@example.com"
+            />
+            <button type="submit" disabled={inviting || !inviteEmail.trim()}>
+              Invite
+            </button>
+          </form>
+        )}
+      </section>
+
       <section className="filters" aria-label="Search and filter issues">
         <input
           type="search"
@@ -186,7 +300,9 @@ export function BoardPage() {
               <input
                 type="checkbox"
                 checked={statusFilter.includes(status)}
-                onChange={() => setStatusFilter((current) => toggleValue(current, status))}
+                onChange={() =>
+                  setStatusFilter((current) => toggleValue(current, status))
+                }
               />
               {STATUS_LABELS[status]}
             </label>
@@ -201,7 +317,11 @@ export function BoardPage() {
                 <input
                   type="checkbox"
                   checked={assigneeFilter.includes(member.id)}
-                  onChange={() => setAssigneeFilter((current) => toggleValue(current, member.id))}
+                  onChange={() =>
+                    setAssigneeFilter((current) =>
+                      toggleValue(current, member.id),
+                    )
+                  }
                 />
                 {member.displayName}
               </label>
@@ -217,7 +337,9 @@ export function BoardPage() {
                 <input
                   type="checkbox"
                   checked={labelFilter.includes(label.id)}
-                  onChange={() => setLabelFilter((current) => toggleValue(current, label.id))}
+                  onChange={() =>
+                    setLabelFilter((current) => toggleValue(current, label.id))
+                  }
                 />
                 {label.name}
               </label>
@@ -226,7 +348,11 @@ export function BoardPage() {
         )}
 
         {hasActiveFilters && (
-          <button type="button" className="filters-clear" onClick={clearFilters}>
+          <button
+            type="button"
+            className="filters-clear"
+            onClick={clearFilters}
+          >
             Clear filters
           </button>
         )}
@@ -242,7 +368,9 @@ export function BoardPage() {
 
       {!loading && board && totalCards === 0 && (
         <p className="board-empty">
-          {hasActiveFilters ? "No issues match these filters." : "No issues yet — add one above."}
+          {hasActiveFilters
+            ? "No issues match these filters."
+            : "No issues yet — add one above."}
         </p>
       )}
 
