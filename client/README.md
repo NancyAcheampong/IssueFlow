@@ -48,6 +48,14 @@ dev`) and its `ALLOWED_ORIGIN` to include this app's origin
 (`http://localhost:5173` by default - already the server's own
 `.env.example` default).
 
+`vite.config.ts` pins the dev server to port 5173 with `strictPort:
+true` - without it, Vite silently moves to 5174+ if 5173's already
+taken (e.g. another project's dev server left running), which then
+makes every API call fail on CORS with no obvious reason why, since
+the server's `ALLOWED_ORIGIN` only matches 5173. `strictPort` turns
+that into an immediate, legible "port 5173 is in use" error instead -
+found live when exactly this happened during manual testing.
+
 ## Architecture
 
 - `src/lib/api.ts` - a thin `fetch` wrapper matching the server's one
