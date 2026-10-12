@@ -74,6 +74,29 @@ found live when exactly this happened during manual testing.
   not the redesign itself - today's migration was a faithful 1:1 port
   (verified with Playwright screenshots, pixel-identical output)
   before any new visual work lands on top of it.
+- **Visual design pass (Oct 12), on top of the CSS Modules
+  foundation above.** `src/index.css`'s `:root` now carries a real
+  token set - color (including one accent color per board status:
+  `--status-backlog`/`--status-todo`/`--status-in-progress`/
+  `--status-done`), a type scale, a spacing scale, radius, and shadow
+  tokens - plus global base styling for every `button`/`input`/
+  `select`/`textarea` (consistent borders, focus rings, hover states).
+  One convention carries most of the button styling for free: any
+  `button[type="submit"]` automatically gets the filled accent
+  "primary action" treatment (Sign up, Log in, Create project, Add
+  issue, Invite), every other button stays a plain secondary button -
+  no per-button classes needed, since every button in this codebase
+  already had the right `type` attribute. `Card`/`Column` read the
+  issue/column's status straight off a `data-status`/
+  `data-column-status` attribute to pick their accent color via a
+  plain CSS attribute selector, rather than a lookup table in
+  TypeScript. The members panel's letter-avatars (`BoardPage.tsx`'s
+  `avatarColor`/`initial` helpers) derive a stable color per person
+  from their own user id - deterministic across reloads, no avatar
+  image storage needed. Verified live the same way as the CSS Modules
+  migration: Playwright screenshots across desktop and mobile
+  viewports, this time checking the new visuals rather than their
+  absence.
 - `src/lib/api.ts` - a thin `fetch` wrapper matching the server's one
   documented error envelope (`{ error: { code, message, fields? } }`);
   every call site gets a typed `ApiError`, never a raw parsed body.
@@ -279,10 +302,13 @@ is the durable, repeatable coverage.
   A real cost (two places to update), not an oversight; setting up
   sharing is a bigger decision than this page of types justifies on
   its own.
-- No design system / component library yet, and the current visuals
-  are still intentionally plain - CSS Modules (Oct 12) is the styling
-  *architecture* for the upcoming visual pass, not the visual pass
-  itself.
+- No formal design system / component library (no shared `Button`,
+  `Input`, etc. React components) - the Oct 12 visual pass is a
+  consistent token set and global base element styling (see
+  Architecture above), not a reusable component library. Each
+  page/component still writes its own markup against those shared
+  tokens. Worth revisiting if the UI grows enough for the duplication
+  across pages to become a real cost.
 - `BoardPage`'s `<h1>` reads the generic "Board," not the actual
   project's name - no `GET /projects/:id` (single-project fetch)
   endpoint exists yet on the server to get it from (only `GET

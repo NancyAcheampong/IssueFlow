@@ -3,19 +3,66 @@
    or forced into a component that doesn't otherwise exist. */
 
 .authPage {
-  max-width: 28rem;
-  margin: 3rem auto;
-  padding: 0 1rem;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
 }
 
-.authPage form {
+.brand {
+  display: block;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: var(--space-2);
+}
+
+.card {
+  width: 100%;
+  max-width: 24rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-6);
+}
+
+.card h1 {
+  font-size: var(--fs-xl);
+  margin: 0 0 var(--space-5);
+}
+
+.card form {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--space-4);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+}
+
+.field label {
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: var(--space-1);
+}
+
+.footer {
+  margin-top: var(--space-5);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  text-align: center;
 }
 
 .fieldError {
   display: block;
   color: var(--danger);
-  font-size: 0.85rem;
+  font-size: var(--fs-xs);
+  margin-top: var(--space-1);
 }

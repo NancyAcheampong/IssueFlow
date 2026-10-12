@@ -38,69 +38,84 @@ export function SignupPage() {
 
   return (
     <main className={styles.authPage}>
-      <h1>Sign up</h1>
-      <form onSubmit={handleSubmit}>
-        <label htmlFor="displayName">Display name</label>
-        <input
-          id="displayName"
-          value={displayName}
-          onChange={(event) => setDisplayName(event.target.value)}
-          required
-          aria-invalid={Boolean(fieldErrors.displayName)}
-          aria-describedby={
-            fieldErrors.displayName ? "displayName-error" : undefined
-          }
-        />
-        {fieldErrors.displayName && (
-          <span
-            className={styles.fieldError}
-            id="displayName-error"
-            role="alert"
-          >
-            {fieldErrors.displayName}
-          </span>
-        )}
+      <div className={styles.card}>
+        <span className={styles.brand}>IssueFlow</span>
+        <h1>Sign up</h1>
+        <form onSubmit={handleSubmit}>
+          <div className={styles.field}>
+            <label htmlFor="displayName">Display name</label>
+            <input
+              id="displayName"
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+              required
+              aria-invalid={Boolean(fieldErrors.displayName)}
+              aria-describedby={
+                fieldErrors.displayName ? "displayName-error" : undefined
+              }
+            />
+            {fieldErrors.displayName && (
+              <span
+                className={styles.fieldError}
+                id="displayName-error"
+                role="alert"
+              >
+                {fieldErrors.displayName}
+              </span>
+            )}
+          </div>
 
-        <label htmlFor="email">Email</label>
-        <input
-          id="email"
-          type="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          required
-          aria-invalid={Boolean(fieldErrors.email)}
-          aria-describedby={fieldErrors.email ? "email-error" : undefined}
-        />
-        {fieldErrors.email && (
-          <span className={styles.fieldError} id="email-error" role="alert">
-            {fieldErrors.email}
-          </span>
-        )}
+          <div className={styles.field}>
+            <label htmlFor="email">Email</label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+              aria-invalid={Boolean(fieldErrors.email)}
+              aria-describedby={fieldErrors.email ? "email-error" : undefined}
+            />
+            {fieldErrors.email && (
+              <span className={styles.fieldError} id="email-error" role="alert">
+                {fieldErrors.email}
+              </span>
+            )}
+          </div>
 
-        <label htmlFor="password">Password</label>
-        <input
-          id="password"
-          type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          required
-          aria-invalid={Boolean(fieldErrors.password)}
-          aria-describedby={fieldErrors.password ? "password-error" : undefined}
-        />
-        {fieldErrors.password && (
-          <span className={styles.fieldError} id="password-error" role="alert">
-            {fieldErrors.password}
-          </span>
-        )}
+          <div className={styles.field}>
+            <label htmlFor="password">Password</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+              aria-invalid={Boolean(fieldErrors.password)}
+              aria-describedby={
+                fieldErrors.password ? "password-error" : undefined
+              }
+            />
+            {fieldErrors.password && (
+              <span
+                className={styles.fieldError}
+                id="password-error"
+                role="alert"
+              >
+                {fieldErrors.password}
+              </span>
+            )}
+          </div>
 
-        {error && <p role="alert">{error}</p>}
-        <button type="submit" disabled={submitting}>
-          Sign up
-        </button>
-      </form>
-      <p>
-        Already have an account? <Link to="/login">Log in</Link>
-      </p>
+          {error && <p role="alert">{error}</p>}
+          <button type="submit" disabled={submitting}>
+            Sign up
+          </button>
+        </form>
+        <p className={styles.footer}>
+          Already have an account? <Link to="/login">Log in</Link>
+        </p>
+      </div>
     </main>
   );
 }

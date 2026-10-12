@@ -1,5 +1,5 @@
 .boardPage {
-  padding: 1rem;
+  padding: var(--space-5) var(--space-6);
   max-width: 100%;
 }
 
@@ -7,87 +7,142 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-4);
   flex-wrap: wrap;
-  margin-bottom: 1rem;
+  margin-bottom: var(--space-5);
 }
 
 .boardHeaderTitle {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--space-3);
+}
+
+.boardHeaderTitle a {
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.boardHeaderTitle a:hover {
+  color: var(--accent);
 }
 
 .boardHeaderTitle h1 {
-  font-size: 1.1rem;
+  font-size: var(--fs-lg);
   margin: 0;
 }
 
 .newIssueForm {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .boardError {
-  background: #fdecec;
+  background: var(--danger-soft);
   border: 1px solid var(--danger);
-  padding: 0.5rem 1rem;
-  border-radius: 0.25rem;
+  color: var(--danger);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
 }
 
 .boardEmpty {
   color: var(--text-muted);
-  padding: 2rem 0;
+  padding: var(--space-8) 0;
   text-align: center;
 }
 
 .membersPanel {
-  margin-bottom: 1rem;
-  padding: 0.75rem 1rem;
+  margin-bottom: var(--space-4);
+  padding: var(--space-4) var(--space-5);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .membersPanel h2 {
-  font-size: 0.85rem;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--text-muted);
-  margin: 0 0 0.5rem;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  margin: 0 0 var(--space-3);
 }
 
 .membersList {
   list-style: none;
   padding: 0;
-  margin: 0 0 0.5rem;
+  margin: 0 0 var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-2);
 }
 
 .memberRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  font-size: 0.9rem;
+  gap: var(--space-3);
+  font-size: var(--fs-sm);
+}
+
+.memberIdentity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.avatar {
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: #fff;
+}
+
+.memberName {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .memberEmail {
-  color: var(--text-muted);
-  font-size: 0.8rem;
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}
+
+.memberRow button {
+  font-size: var(--fs-xs);
+  padding: 0.3rem 0.65rem;
+  color: var(--danger);
+  border-color: var(--danger-soft);
+  background: var(--danger-soft);
+}
+
+.memberRow button:hover:not(:disabled) {
+  background: var(--danger-soft);
+  border-color: var(--danger);
 }
 
 .inviteForm {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
 }
 
 .inviteForm label {
-  font-size: 0.85rem;
+  font-size: var(--fs-sm);
+  font-weight: 500;
   color: var(--text-muted);
 }
 
@@ -99,12 +154,13 @@
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  padding: 0.75rem;
+  gap: var(--space-5);
+  margin-bottom: var(--space-5);
+  padding: var(--space-4);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .filtersSearch {
@@ -118,40 +174,41 @@
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: var(--space-2);
   min-width: 8rem;
 }
 
 .filterGroup legend {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
   padding: 0;
-  margin-bottom: 0.15rem;
+  margin-bottom: var(--space-1);
 }
 
 .filterCheckbox {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.85rem;
+  gap: var(--space-2);
+  font-size: var(--fs-sm);
   font-weight: normal;
 }
 
 .filtersClear {
   align-self: flex-end;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
   background: none;
-  border: 1px solid var(--border);
-  border-radius: 0.3rem;
-  padding: 0.35rem 0.75rem;
-  font-size: 0.8rem;
+  border-color: var(--border);
 }
 
 .boardColumns {
   display: flex;
-  gap: 1rem;
+  gap: var(--space-4);
   overflow-x: auto;
-  padding-bottom: 1rem;
+  padding-bottom: var(--space-4);
 }
 
 /* Sep 21: responsive pass. Below this width there isn't room for
@@ -160,6 +217,10 @@
    sideways" - a standard mobile Kanban pattern. scroll-snap-type here
    pairs with Column.module.css's scroll-snap-align on each column. */
 @media (max-width: 640px) {
+  .boardPage {
+    padding: var(--space-4);
+  }
+
   .boardHeader {
     flex-direction: column;
     align-items: stretch;

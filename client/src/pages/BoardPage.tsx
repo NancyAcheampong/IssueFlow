@@ -38,6 +38,21 @@ function toggleValue<T>(list: T[], value: T): T[] {
     : [...list, value];
 }
 
+// Letter-avatar for the members panel - a deterministic hue from the
+// member's own id (stable across reloads/sessions, no avatar image
+// storage needed) keeps each person visually distinct at a glance.
+function avatarColor(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  }
+  return `hsl(${hash % 360}, 55%, 45%)`;
+}
+
+function initial(displayName: string): string {
+  return displayName.trim().charAt(0).toUpperCase() || "?";
+}
+
 export function BoardPage() {
   usePageTitle("Board");
   const { projectId } = useParams<{ projectId: string }>();
@@ -249,9 +264,16 @@ export function BoardPage() {
         <ul className={styles.membersList}>
           {members.map((member) => (
             <li key={member.id} className={styles.memberRow}>
-              <span>
-                {member.displayName}{" "}
-                <span className={styles.memberEmail}>({member.email})</span>
+              <span className={styles.memberIdentity}>
+                <span
+                  className={styles.avatar}
+                  style={{ background: avatarColor(member.id) }}
+                  aria-hidden="true"
+                >
+                  {initial(member.displayName)}
+                </span>
+                <span className={styles.memberName}>{member.displayName}</span>
+                <span className={styles.memberEmail}>{member.email}</span>
               </span>
               {isOwner && member.id !== user?.id && (
                 <button

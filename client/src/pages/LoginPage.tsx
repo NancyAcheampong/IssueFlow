@@ -33,34 +33,39 @@ export function LoginPage() {
 
   return (
     <main className={styles.authPage}>
-      <h1>Log in</h1>
-      <form onSubmit={handleSubmit}>
-        <label>
-          Email
-          <input
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            required
-          />
-        </label>
-        <label>
-          Password
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
-        </label>
-        {error && <p role="alert">{error}</p>}
-        <button type="submit" disabled={submitting}>
-          Log in
-        </button>
-      </form>
-      <p>
-        No account yet? <Link to="/signup">Sign up</Link>
-      </p>
+      <div className={styles.card}>
+        <span className={styles.brand}>IssueFlow</span>
+        <h1>Log in</h1>
+        <form onSubmit={handleSubmit}>
+          <div className={styles.field}>
+            <label htmlFor="login-email">Email</label>
+            <input
+              id="login-email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+            />
+          </div>
+          <div className={styles.field}>
+            <label htmlFor="login-password">Password</label>
+            <input
+              id="login-password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
+          </div>
+          {error && <p role="alert">{error}</p>}
+          <button type="submit" disabled={submitting}>
+            Log in
+          </button>
+        </form>
+        <p className={styles.footer}>
+          No account yet? <Link to="/signup">Sign up</Link>
+        </p>
+      </div>
     </main>
   );
 }

@@ -38,6 +38,7 @@ export function Card({ issue, onMoveToColumn }: CardProps) {
       ref={setNodeRef}
       style={style}
       className={styles.card}
+      data-status={issue.status}
       {...attributes}
       {...listeners}
     >

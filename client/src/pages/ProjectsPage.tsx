@@ -47,10 +47,10 @@ export function ProjectsPage() {
 
   return (
     <main className={styles.projectsPage}>
-      <header>
+      <header className={styles.header}>
         <h1>Projects</h1>
-        <p>
-          Signed in as {user?.displayName}.{" "}
+        <p className={styles.userInfo}>
+          Signed in as {user?.displayName}
           <button type="button" onClick={logout}>
             Log out
           </button>
@@ -75,12 +75,17 @@ export function ProjectsPage() {
       <ul className={styles.projectList}>
         {projects.map((project) => (
           <li key={project.id}>
-            <Link to={`/projects/${project.id}/board`}>{project.name}</Link>
+            <Link
+              to={`/projects/${project.id}/board`}
+              className={styles.projectCard}
+            >
+              {project.name}
+            </Link>
           </li>
         ))}
       </ul>
       {!loading && projects.length === 0 && (
-        <p>No projects yet - create one above.</p>
+        <p className={styles.empty}>No projects yet - create one above.</p>
       )}
     </main>
   );

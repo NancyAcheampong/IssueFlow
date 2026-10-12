@@ -1,27 +1,63 @@
 .card {
-  background: var(--bg);
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 0.4rem;
-  padding: 0.5rem 0.65rem;
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
   cursor: grab;
+  box-shadow: var(--shadow-sm);
+  transition:
+    box-shadow var(--transition),
+    transform var(--transition);
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.card[data-status="BACKLOG"] {
+  border-left-color: var(--status-backlog);
+}
+
+.card[data-status="TODO"] {
+  border-left-color: var(--status-todo);
+}
+
+.card[data-status="IN_PROGRESS"] {
+  border-left-color: var(--status-in-progress);
+}
+
+.card[data-status="DONE"] {
+  border-left-color: var(--status-done);
 }
 
 .cardTitle {
-  margin: 0 0 0.25rem;
+  margin: 0 0 var(--space-2);
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: var(--fs-sm);
 }
 
 .cardDescription {
-  margin: 0 0 0.5rem;
-  font-size: 0.8rem;
+  margin: 0 0 var(--space-3);
+  font-size: var(--fs-xs);
   color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .cardMove {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.75rem;
-  color: var(--text-muted);
+  gap: var(--space-2);
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+.cardMove select {
+  font-size: var(--fs-xs);
+  padding: 0.3rem 0.5rem;
 }

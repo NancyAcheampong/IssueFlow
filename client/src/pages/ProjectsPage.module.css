@@ -1,27 +1,88 @@
 .projectsPage {
-  max-width: 28rem;
-  margin: 3rem auto;
-  padding: 0 1rem;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.header h1 {
+  font-size: var(--fs-xl);
+  margin: 0;
+}
+
+.userInfo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin: 0;
 }
 
 .newProjectForm {
   display: flex;
-  flex-direction: row;
-  gap: 0.75rem;
-  margin: 1rem 0;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+
+.newProjectForm input {
+  flex: 1;
 }
 
 .projectList {
   list-style: none;
   padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 .projectList li {
-  padding: 0.5rem 0;
-  border-bottom: 1px solid var(--border);
+  padding: 0;
+  border: none;
+}
+
+.projectCard {
+  display: block;
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-weight: 600;
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition),
+    transform var(--transition);
+}
+
+.projectCard:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-sm);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+.empty {
+  color: var(--text-muted);
+  text-align: center;
+  padding: var(--space-8) 0;
 }
 
 @media (max-width: 640px) {
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .newProjectForm {
     flex-direction: column;
     align-items: stretch;
