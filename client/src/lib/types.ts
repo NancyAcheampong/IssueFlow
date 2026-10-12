@@ -20,10 +20,16 @@ export const STATUS_LABELS: Record<IssueStatus, string> = {
   DONE: "Done",
 };
 
+// Site-wide role (Oct 12) - distinct from a project's OWNER/MEMBER
+// role. Exactly one ADMIN exists in practice; only an ADMIN can
+// provision new accounts (there's no public signup).
+export type UserRole = "ADMIN" | "MEMBER";
+
 export interface SafeUser {
   id: string;
   email: string;
   displayName: string;
+  role: UserRole;
   createdAt: string;
 }
 

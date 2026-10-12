@@ -11,6 +11,13 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   JWT_SECRET: z.string().min(16, "JWT_SECRET must be at least 16 characters"),
   JWT_EXPIRES_IN: z.string().default("1d"),
+  // Oct 12: IssueFlow provisions accounts admin-first, not via public
+  // signup - these seed the one ADMIN account at startup (see
+  // lib/seedAdmin.ts). Required, same NFR-08 "refuse to start rather
+  // than fail weirdly later" reasoning as every other required value
+  // here - there'd be no way to create a second account otherwise.
+  ADMIN_EMAIL: z.string().trim().toLowerCase().email("ADMIN_EMAIL must be a valid email address"),
+  ADMIN_PASSWORD: z.string().min(8, "ADMIN_PASSWORD must be at least 8 characters"),
   ALLOWED_ORIGIN: z.string().min(1, "ALLOWED_ORIGIN is required"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });

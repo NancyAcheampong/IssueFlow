@@ -17,7 +17,10 @@ config({ path: resolve(__dirname, "../.env.test") });
 // is left alone (??=) - these are just the fallback for local Postgres.
 process.env.NODE_ENV ??= "test";
 process.env.PORT ??= "4000";
-process.env.DATABASE_URL ??= "postgresql://issueflow:issueflow@localhost:5432/issueflow_test?schema=public";
+process.env.DATABASE_URL ??=
+  "postgresql://issueflow:issueflow@localhost:5432/issueflow_test?schema=public";
 process.env.JWT_SECRET ??= "test-only-secret-do-not-use-in-prod";
+process.env.ADMIN_EMAIL ??= "admin@test.example.com";
+process.env.ADMIN_PASSWORD ??= "test-only-admin-password";
 process.env.ALLOWED_ORIGIN ??= "http://localhost:5173";
 process.env.LOG_LEVEL ??= "silent";

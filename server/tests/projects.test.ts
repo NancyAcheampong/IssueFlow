@@ -3,20 +3,19 @@ import request from "supertest";
 import type { Express } from "express";
 import { createApp } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
+import { createTestUser } from "./helpers/createTestUser.js";
 
 const TEST_PASSWORD = "correct horse battery staple";
 
 // Shared by the multi-user tests below (list isolation, add-member
-// authorization) - signs a fresh account up and logs it in, returns
+// authorization) - creates a fresh account and logs it in, returns
 // enough to act as that user in subsequent requests.
 async function signupAndLogin(app: Express, email: string, displayName: string) {
-  const signupResponse = await request(app).post("/api/v1/auth/signup").send({
-    email,
-    displayName,
-    password: TEST_PASSWORD,
-  });
-  const loginResponse = await request(app).post("/api/v1/auth/login").send({ email, password: TEST_PASSWORD });
-  return { userId: signupResponse.body.user.id as string, token: loginResponse.body.token as string };
+  const user = await createTestUser({ email, displayName, password: TEST_PASSWORD });
+  const loginResponse = await request(app)
+    .post("/api/v1/auth/login")
+    .send({ email, password: TEST_PASSWORD });
+  return { userId: user.id, token: loginResponse.body.token as string };
 }
 
 // Integration test: real app, real database, a genuine signup+login
@@ -30,12 +29,12 @@ describe("POST /api/v1/projects", () => {
   let userId: string;
 
   beforeAll(async () => {
-    const signupResponse = await request(app).post("/api/v1/auth/signup").send({
+    const user = await createTestUser({
       email: testEmail,
       displayName: "Projects Route Test",
       password: testPassword,
     });
-    userId = signupResponse.body.user.id;
+    userId = user.id;
 
     const loginResponse = await request(app).post("/api/v1/auth/login").send({
       email: testEmail,
@@ -113,8 +112,14 @@ describe("GET /api/v1/projects", () => {
     tokenA = userA.token;
     const userB = await signupAndLogin(app, emailB, "List Test B");
 
-    await request(app).post("/api/v1/projects").set("Authorization", `Bearer ${tokenA}`).send({ name: "A's Project" });
-    await request(app).post("/api/v1/projects").set("Authorization", `Bearer ${userB.token}`).send({ name: "B's Project" });
+    await request(app)
+      .post("/api/v1/projects")
+      .set("Authorization", `Bearer ${tokenA}`)
+      .send({ name: "A's Project" });
+    await request(app)
+      .post("/api/v1/projects")
+      .set("Authorization", `Bearer ${userB.token}`)
+      .send({ name: "B's Project" });
   });
 
   afterAll(async () => {
@@ -124,7 +129,9 @@ describe("GET /api/v1/projects", () => {
   });
 
   it("returns only projects the requester belongs to - not everyone's (PRJ-02)", async () => {
-    const response = await request(app).get("/api/v1/projects").set("Authorization", `Bearer ${tokenA}`);
+    const response = await request(app)
+      .get("/api/v1/projects")
+      .set("Authorization", `Bearer ${tokenA}`);
 
     expect(response.status).toBe(200);
     const names = (response.body.projects as { name: string }[]).map((p) => p.name);
@@ -227,7 +234,9 @@ describe("POST /api/v1/projects/:projectId/members", () => {
   });
 
   it("requires authentication", async () => {
-    const response = await request(app).post(`/api/v1/projects/${projectId}/members`).send({ email: memberEmail });
+    const response = await request(app)
+      .post(`/api/v1/projects/${projectId}/members`)
+      .send({ email: memberEmail });
     expect(response.status).toBe(401);
   });
 });
@@ -558,7 +567,9 @@ describe("PATCH /api/v1/projects/:projectId", () => {
   });
 
   it("requires authentication", async () => {
-    const response = await request(app).patch(`/api/v1/projects/${projectId}`).send({ name: "No Auth" });
+    const response = await request(app)
+      .patch(`/api/v1/projects/${projectId}`)
+      .send({ name: "No Auth" });
     expect(response.status).toBe(401);
   });
 });

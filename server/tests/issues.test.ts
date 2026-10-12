@@ -3,20 +3,17 @@ import request from "supertest";
 import type { Express } from "express";
 import { createApp } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
+import { createTestUser } from "./helpers/createTestUser.js";
 
 const TEST_PASSWORD = "correct horse battery staple";
 
 async function signupAndLogin(app: Express, email: string, displayName: string) {
-  const signupResponse = await request(app).post("/api/v1/auth/signup").send({
-    email,
-    displayName,
-    password: TEST_PASSWORD,
-  });
+  const user = await createTestUser({ email, displayName, password: TEST_PASSWORD });
   const loginResponse = await request(app)
     .post("/api/v1/auth/login")
     .send({ email, password: TEST_PASSWORD });
   return {
-    userId: signupResponse.body.user.id as string,
+    userId: user.id,
     token: loginResponse.body.token as string,
   };
 }

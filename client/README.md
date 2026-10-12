@@ -12,8 +12,8 @@ build against.
   minimal config. No meta-framework (Next.js, Remix, etc.) - this is a
   single authenticated app behind a REST API, not a site that needs
   SSR/SEO.
-- **react-router-dom** - client-side routing for /login, /signup,
-  /projects, /projects/:id/board.
+- **react-router-dom** - client-side routing for /login, /projects,
+  /projects/:id/board, /admin (admin-only, D-32).
 - **@dnd-kit/core + @dnd-kit/sortable** - drag-and-drop for the board.
   Chosen over react-beautiful-dnd (unmaintained) and native HTML5 DnD
   (poor touch/mobile support, poor accessibility story) - dnd-kit has
@@ -67,10 +67,10 @@ found live when exactly this happened during manual testing.
   global concerns live there: design tokens (`:root` custom
   properties), element resets (`*`, `body`, `a`, `button`), and the
   `[role="alert"]`/`@media (pointer: coarse)` rules that apply
-  everywhere rather than to one component. `LoginPage` and
-  `SignupPage` share one `AuthPages.module.css` since they're
-  genuinely the same page shell; every other component has its own.
-  This is the styling *foundation* for an upcoming visual redesign,
+  everywhere rather than to one component. (Originally shared with
+  `SignupPage` via `AuthPages.module.css` - renamed to
+  `LoginPage.module.css` when `SignupPage` was removed, D-32.) This is
+  the styling *foundation* for an upcoming visual redesign,
   not the redesign itself - today's migration was a faithful 1:1 port
   (verified with Playwright screenshots, pixel-identical output)
   before any new visual work lands on top of it.
@@ -83,7 +83,7 @@ found live when exactly this happened during manual testing.
   `select`/`textarea` (consistent borders, focus rings, hover states).
   One convention carries most of the button styling for free: any
   `button[type="submit"]` automatically gets the filled accent
-  "primary action" treatment (Sign up, Log in, Create project, Add
+  "primary action" treatment (Log in, Create user, Create project, Add
   issue, Invite), every other button stays a plain secondary button -
   no per-button classes needed, since every button in this codebase
   already had the right `type` attribute. `Card`/`Column` read the
@@ -97,6 +97,21 @@ found live when exactly this happened during manual testing.
   migration: Playwright screenshots across desktop and mobile
   viewports, this time checking the new visuals rather than their
   absence.
+- `src/components/AppHeader.tsx` (Oct 12) - the one piece of chrome
+  shared by every authenticated page (brand/home link, who's signed
+  in, log out, and the admin-only "Create user" link). Before this,
+  `ProjectsPage` and `BoardPage` each grew their own ad hoc header and
+  the app didn't read as one product past the login card. Deliberately
+  thin - page-specific actions (new project, new issue, filters) stay
+  on each page's own header below this one.
+- `src/components/RequireAdmin.tsx` (D-32) - mirrors the server's
+  `requireAdmin` middleware at the routing layer the same way
+  `RequireAuth` mirrors `requireAuth`. Always nested inside
+  `RequireAuth` (see `App.tsx`), so by the time it renders, `user` is
+  already populated - it only adds the role check, redirecting a
+  non-admin to `/projects`. The real security boundary is the server's
+  403, not this redirect - hiding the nav link/route is just avoiding
+  showing a control that would fail for anyone else.
 - `src/lib/api.ts` - a thin `fetch` wrapper matching the server's one
   documented error envelope (`{ error: { code, message, fields? } }`);
   every call site gets a typed `ApiError`, never a raw parsed body.
@@ -143,18 +158,19 @@ as the Sep 17-19 verification above) at 375px, 768px, and 1280px.
 ## Accessibility (Oct 8 — D-29)
 
 `src/lib/usePageTitle.ts` sets `document.title` on every page
-(`LoginPage`, `SignupPage`, `ProjectsPage`, `BoardPage`) - React Router
-doesn't do this on its own, and a screen reader announces the document
-title after navigating, so every page past the first was previously
-silently announced as just "IssueFlow." `BoardPage` gained the `<h1>`
-it never had. `SignupPage`'s field errors use explicit
-`<label htmlFor>`/`<input id>` pairs with the error as a sibling
-`<span>`, associated only via `aria-describedby`/`aria-invalid` - not
-nested inside the `<label>`, which would make the error text part of
-the input's accessible *name* rather than its description (a real bug
-caught live - see D-29 for what that actually looked like, and
-`src/pages/SignupPage.test.tsx` for the regression test that locks the
-fix in). The same live-verification pass also caught a responsive
+(`LoginPage`, `ProjectsPage`, `BoardPage`, `CreateUserPage`) - React
+Router doesn't do this on its own, and a screen reader announces the
+document title after navigating, so every page past the first was
+previously silently announced as just "IssueFlow." `BoardPage` gained
+the `<h1>` it never had. The page that originally caught this
+(`SignupPage`, since replaced by `CreateUserPage` under D-32) used
+explicit `<label htmlFor>`/`<input id>` pairs with the error as a
+sibling `<span>`, associated only via `aria-describedby`/
+`aria-invalid` - not nested inside the `<label>`, which would make the
+error text part of the input's accessible *name* rather than its
+description (a real bug caught live - see D-29 for what that actually
+looked like). `CreateUserPage` carries the same fixed pattern forward.
+The same live-verification pass also caught a responsive
 regression: `.filters-search`'s `flex: 1 1 14rem` sized the search
 box's *height* instead of its width once the mobile breakpoint
 switched `.filters` to a column layout - fixed in the same media
@@ -249,29 +265,27 @@ on unmount; filters pass through to `getBoard` unchanged; a *new
 object* with identical filter content does NOT trigger a refetch, but
 actually different content does (the stringify-as-dependency-key
 design, proven directly rather than just asserted). `AuthContext.test.tsx`
-(7 tests, added Oct 7 - this session logic had zero coverage until
-then) proves the actual session lifecycle: no stored token goes
-straight to anonymous without ever calling the API; a stored token is
-only trusted *after* `GET /me` confirms it (loading -> authenticated),
-never blindly; a token `GET /me` rejects is actively cleared from
-storage, not just ignored (otherwise the next load retries the same
-dead token forever); `login()` stores the new token and becomes
-authenticated; `signup()` genuinely chains into `login()` rather than
-expecting its own token back (AUTH-01 - the server never issues one
-from signup); `logout()` clears both storage and in-memory state;
-`useAuth()` throws outside an `AuthProvider`.
+(6 tests, added Oct 7 - this session logic had zero coverage until
+then; one more, for `signup()`, was removed Oct 12 along with
+`signup()` itself - D-32) proves the actual session lifecycle: no
+stored token goes straight to anonymous without ever calling the API;
+a stored token is only trusted *after* `GET /me` confirms it (loading
+-> authenticated), never blindly; a token `GET /me` rejects is
+actively cleared from storage, not just ignored (otherwise the next
+load retries the same dead token forever); `login()` stores the new
+token and becomes authenticated; `logout()` clears both storage and
+in-memory state; `useAuth()` throws outside an `AuthProvider`.
 
-`src/pages/SignupPage.test.tsx` (3 tests, added Oct 8 as a direct
-regression test for the D-29 accessible-name bug): the password
-field's accessible name stays exactly "Password" even while a field
-error is showing (this is the test that would fail if the error span
-were nested back inside the `<label>`); `aria-invalid`/`aria-describedby`
-resolve to the actual error element's text once a field error exists;
-neither attribute is present before any submission. Needed adding
-`afterEach(cleanup)` to `setupTests.ts` to get here - `globals: false`
+`SignupPage.test.tsx` (3 tests, added Oct 8 as a direct regression
+test for the D-29 accessible-name bug) was removed Oct 12 along with
+`SignupPage` itself (D-32) - needed adding `afterEach(cleanup)` to
+`setupTests.ts` to get there in the first place (`globals: false`
 meant Testing Library's own automatic cleanup between tests had never
-been registering, invisible until a `screen`-querying test (this was
-the first one) actually needed it.
+been registering, invisible until a `screen`-querying test, this was
+the first one, actually needed it), which stays in place since other
+tests depend on it. The accessible-name pattern itself lives on in
+`CreateUserPage`, covered live rather than by a committed test (see
+D-32's verification notes).
 
 Beyond the committed suite, the Oct 3 filter UI was verified live
 (same one-off Playwright reasoning as every other live verification in
@@ -283,7 +297,7 @@ counting actual `/board` network requests while simulating fast typing
 confirmed 0 requests fired mid-keystroke-burst and exactly 1 once
 typing settles.
 
-Beyond the committed suite, the full flow (signup through drag-and-drop,
+Beyond the committed suite, the full flow (login through drag-and-drop,
 the keyboard move control, and rollback on a forced 409) was verified
 live against a running server + browser before this landed - see the
 commit this file was added in for what that covered. That one-off
@@ -323,3 +337,10 @@ is the durable, repeatable coverage.
   announcing live updates is its own real failure mode (a noisy board
   with several people active becomes unusable), and getting this right
   is a deliberate design decision, not a quick addition.
+- No "change my password" or "deactivate/remove a user" feature (D-32)
+  - the admin sets an account's *initial* password at creation and
+    there's currently no way to change it afterward (by the admin or
+    the account holder themselves), and no way to revoke an account
+    once created. Real gaps for an actual rollout, not addressed here
+    since they weren't part of what was asked for; worth a follow-up
+    pass before this is handed to real coworkers.

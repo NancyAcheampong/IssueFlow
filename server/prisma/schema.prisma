@@ -13,6 +13,15 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Oct 12: IssueFlow is an internal workplace tool, not a public
+// sign-up-yourself product - ADMIN provisions every other account
+// (see modules/admin). Same lowercase-in-Postgres/SCREAMING_CASE-in-TS
+// split as ProjectRole below, for the same reason.
+enum UserRole {
+  ADMIN  @map("admin")
+  MEMBER @map("member")
+}
+
 // AUTH-01/AUTH-03: a registered, authenticated person. The password is
 // never stored in plain text (passwordHash only) and this model should
 // never be serialized straight to JSON in an API response - always pick
@@ -26,6 +35,12 @@ model User {
   email        String   @unique
   displayName  String   @map("display_name")
   passwordHash String   @map("password_hash")
+  // Site-wide role, distinct from ProjectRole (which is per-project).
+  // Exactly one ADMIN exists in practice - seeded from ADMIN_EMAIL/
+  // ADMIN_PASSWORD at server startup (lib/seedAdmin.ts) - and only an
+  // ADMIN can provision new accounts (modules/admin). Every other user
+  // defaults to MEMBER.
+  role         UserRole @default(MEMBER)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -113,10 +128,10 @@ model ProjectMembership {
 // enum makes an invalid status a schema-level impossibility, not just
 // something application code has to remember to check.
 enum IssueStatus {
-  BACKLOG      @map("backlog")
-  TODO         @map("todo")
-  IN_PROGRESS  @map("in_progress")
-  DONE         @map("done")
+  BACKLOG     @map("backlog")
+  TODO        @map("todo")
+  IN_PROGRESS @map("in_progress")
+  DONE        @map("done")
 }
 
 // The single source of truth for a work item (§5.2: "A card is never a
@@ -217,8 +232,8 @@ model Comment {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  issue  Issue   @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  author User    @relation("CommentAuthor", fields: [authorId], references: [id])
+  issue   Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  author  User      @relation("CommentAuthor", fields: [authorId], references: [id])
   // Deleting a parent comment cascades to its replies - an orphaned
   // reply with no parent to thread under isn't a state worth keeping
   // around; Comment has no independent meaning once its own thread

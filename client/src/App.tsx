@@ -1,15 +1,15 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { LoginPage } from "./pages/LoginPage";
-import { SignupPage } from "./pages/SignupPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { BoardPage } from "./pages/BoardPage";
+import { CreateUserPage } from "./pages/CreateUserPage";
 import { RequireAuth } from "./components/RequireAuth";
+import { RequireAdmin } from "./components/RequireAdmin";
 
 export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/signup" element={<SignupPage />} />
       <Route
         path="/projects"
         element={
@@ -23,6 +23,16 @@ export function App() {
         element={
           <RequireAuth>
             <BoardPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <RequireAuth>
+            <RequireAdmin>
+              <CreateUserPage />
+            </RequireAdmin>
           </RequireAuth>
         }
       />

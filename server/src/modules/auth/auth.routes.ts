@@ -2,25 +2,16 @@ import { Router } from "express";
 import { asyncHandler } from "../../lib/asyncHandler.js";
 import { signAccessToken } from "../../lib/jwt.js";
 import { authRateLimit } from "../../middleware/authRateLimit.js";
-import { loginSchema, signupSchema } from "./auth.schemas.js";
-import { createUser, verifyCredentials } from "./auth.service.js";
+import { loginSchema } from "./auth.schemas.js";
+import { verifyCredentials } from "./auth.service.js";
 
 export const authRouter = Router();
 
-// POST /api/v1/auth/signup - AUTH-01. Deliberately does not issue a JWT -
-// signup and "start a session" stay two separate, independently testable
-// steps (D-02 in the spec). The client calls /login next.
-// Rate-limited (Oct 6 security review) - account creation is as worth
-// throttling as login itself.
-authRouter.post(
-  "/signup",
-  authRateLimit,
-  asyncHandler(async (req, res) => {
-    const input = signupSchema.parse(req.body);
-    const user = await createUser(input);
-    res.status(201).json({ user });
-  }),
-);
+// POST /api/v1/auth/signup removed (Oct 12) - IssueFlow is an internal
+// workplace tool, not a public sign-up-yourself product. Account
+// creation moved to POST /api/v1/admin/users (modules/admin), which
+// only an ADMIN can call. The seeded admin account (lib/seedAdmin.ts)
+// provisions every other account from there.
 
 // POST /api/v1/auth/login - AUTH-02. Verifies credentials, then issues
 // the access token as part of the response body (not a cookie) - the

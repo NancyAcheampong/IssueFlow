@@ -12,6 +12,7 @@ import { issuesRouter, issueRouter } from "./modules/issues/issues.routes.js";
 import { commentsRouter } from "./modules/comments/comments.routes.js";
 import { projectLabelsRouter, issueLabelsRouter } from "./modules/labels/labels.routes.js";
 import { boardRouter } from "./modules/board/board.routes.js";
+import { adminUsersRouter } from "./modules/admin/adminUsers.routes.js";
 import { notFoundHandler, errorHandler } from "./middleware/errorHandler.js";
 
 export function createApp(): Express {
@@ -48,6 +49,7 @@ export function createApp(): Express {
   app.use("/api/v1/projects", projectLabelsRouter);
   app.use("/api/v1/issues", issueLabelsRouter);
   app.use("/api/v1/projects", boardRouter);
+  app.use("/api/v1/admin/users", adminUsersRouter);
 
   // Future routers (search) get mounted here in later phases, all
   // under /api/v1.

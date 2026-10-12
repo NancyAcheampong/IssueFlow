@@ -27,10 +27,19 @@ export function Card({ issue, onMoveToColumn }: CardProps) {
     isDragging,
   } = useSortable({ id: issue.id });
 
+  const baseTransform = CSS.Transform.toString(transform);
   const style = {
-    transform: CSS.Transform.toString(transform),
+    // A slight rotation + stronger shadow while actively dragging - a
+    // small "lifted off the board" cue that reads better than opacity
+    // alone, which just made the card look broken/half-loaded rather
+    // than intentionally picked up.
+    transform:
+      isDragging && baseTransform
+        ? `${baseTransform} rotate(2deg)`
+        : baseTransform,
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.85 : 1,
+    boxShadow: isDragging ? "var(--shadow-md)" : undefined,
   };
 
   return (

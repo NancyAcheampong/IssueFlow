@@ -5,11 +5,12 @@ import { useAuth } from "../lib/AuthContext";
 import { usePageTitle } from "../lib/usePageTitle";
 import { createProject, listProjects } from "../lib/endpoints";
 import type { Project } from "../lib/types";
+import { AppHeader } from "../components/AppHeader";
 import styles from "./ProjectsPage.module.css";
 
 export function ProjectsPage() {
   usePageTitle("Projects");
-  const { token, user, logout } = useAuth();
+  const { token } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,47 +47,42 @@ export function ProjectsPage() {
   }
 
   return (
-    <main className={styles.projectsPage}>
-      <header className={styles.header}>
-        <h1>Projects</h1>
-        <p className={styles.userInfo}>
-          Signed in as {user?.displayName}
-          <button type="button" onClick={logout}>
-            Log out
+    <>
+      <AppHeader />
+      <main className={styles.projectsPage}>
+        <h1 className={styles.pageTitle}>Projects</h1>
+
+        <form onSubmit={handleCreate} className={styles.newProjectForm}>
+          <input
+            value={newName}
+            onChange={(event) => setNewName(event.target.value)}
+            placeholder="New project name"
+            aria-label="New project name"
+          />
+          <button type="submit" disabled={!newName.trim()}>
+            Create project
           </button>
-        </p>
-      </header>
+        </form>
 
-      <form onSubmit={handleCreate} className={styles.newProjectForm}>
-        <input
-          value={newName}
-          onChange={(event) => setNewName(event.target.value)}
-          placeholder="New project name"
-          aria-label="New project name"
-        />
-        <button type="submit" disabled={!newName.trim()}>
-          Create project
-        </button>
-      </form>
+        {error && <p role="alert">{error}</p>}
+        {loading && <p>Loading…</p>}
 
-      {error && <p role="alert">{error}</p>}
-      {loading && <p>Loading…</p>}
-
-      <ul className={styles.projectList}>
-        {projects.map((project) => (
-          <li key={project.id}>
-            <Link
-              to={`/projects/${project.id}/board`}
-              className={styles.projectCard}
-            >
-              {project.name}
-            </Link>
-          </li>
-        ))}
-      </ul>
-      {!loading && projects.length === 0 && (
-        <p className={styles.empty}>No projects yet - create one above.</p>
-      )}
-    </main>
+        <ul className={styles.projectList}>
+          {projects.map((project) => (
+            <li key={project.id}>
+              <Link
+                to={`/projects/${project.id}/board`}
+                className={styles.projectCard}
+              >
+                {project.name}
+              </Link>
+            </li>
+          ))}
+        </ul>
+        {!loading && projects.length === 0 && (
+          <p className={styles.empty}>No projects yet - create one above.</p>
+        )}
+      </main>
+    </>
   );
 }

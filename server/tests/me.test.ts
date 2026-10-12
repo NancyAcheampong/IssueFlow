@@ -2,9 +2,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
+import { createTestUser } from "./helpers/createTestUser.js";
 
-// Integration test: real app, real database, a real signup + login to
-// get a genuine token - proving requireAuth and GET /me actually work
+// Integration test: real app, real database, a real login to get a
+// genuine token - proving requireAuth and GET /me actually work
 // together, not just in isolation.
 describe("GET /api/v1/me", () => {
   const app = createApp();
@@ -14,12 +15,12 @@ describe("GET /api/v1/me", () => {
   let userId: string;
 
   beforeAll(async () => {
-    const signupResponse = await request(app).post("/api/v1/auth/signup").send({
+    const user = await createTestUser({
       email: testEmail,
       displayName: "Me Test User",
       password: testPassword,
     });
-    userId = signupResponse.body.user.id;
+    userId = user.id;
 
     const loginResponse = await request(app).post("/api/v1/auth/login").send({
       email: testEmail,
@@ -53,7 +54,9 @@ describe("GET /api/v1/me", () => {
   });
 
   it("rejects a request with an invalid token", async () => {
-    const response = await request(app).get("/api/v1/me").set("Authorization", "Bearer garbage-token");
+    const response = await request(app)
+      .get("/api/v1/me")
+      .set("Authorization", "Bearer garbage-token");
 
     expect(response.status).toBe(401);
   });

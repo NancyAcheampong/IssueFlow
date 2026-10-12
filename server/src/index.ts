@@ -5,8 +5,14 @@ import { logger } from "./lib/logger.js";
 import { closeDatabasePool } from "./lib/db.js";
 import { disconnectPrisma } from "./lib/prisma.js";
 import { attachRealtime } from "./realtime/socket.js";
+import { ensureAdminUser } from "./lib/seedAdmin.js";
 
 const app = createApp();
+
+// Awaited before accepting traffic (Oct 12): IssueFlow has no public
+// signup, so the seeded admin needs to exist before anyone could
+// possibly log in to provision further accounts.
+await ensureAdminUser();
 
 const server = app.listen(env.PORT, () => {
   logger.info(`IssueFlow API listening on port ${env.PORT} (${env.NODE_ENV})`);

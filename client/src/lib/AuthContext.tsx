@@ -8,11 +8,7 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 import { getStoredToken, setStoredToken } from "./api";
-import {
-  getMe,
-  login as loginRequest,
-  signup as signupRequest,
-} from "./endpoints";
+import { getMe, login as loginRequest } from "./endpoints";
 import type { SafeUser } from "./types";
 
 // AUTH-02/AUTH-04: a stateless bearer token, same model as the server
@@ -29,11 +25,6 @@ interface AuthState {
 
 interface AuthContextValue extends AuthState {
   login: (email: string, password: string) => Promise<void>;
-  signup: (
-    email: string,
-    displayName: string,
-    password: string,
-  ) => Promise<void>;
   logout: () => void;
 }
 
@@ -69,26 +60,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ user, token, status: "authenticated" });
   }, []);
 
-  const signup = useCallback(
-    async (email: string, displayName: string, password: string) => {
-      // AUTH-01: signup and login are deliberately separate steps on
-      // the server (signup never returns a token) - the client just
-      // chains them so the person doesn't have to type their password
-      // twice.
-      await signupRequest(email, displayName, password);
-      await login(email, password);
-    },
-    [login],
-  );
-
   const logout = useCallback(() => {
     setStoredToken(null);
     setState({ user: null, token: null, status: "anonymous" });
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ ...state, login, signup, logout }),
-    [state, login, signup, logout],
+    () => ({ ...state, login, logout }),
+    [state, login, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -6,10 +6,10 @@ import type { SafeUser } from "./types";
 
 // Oct 7 ("fill in missing tests"): this is the one piece of client
 // session logic with zero coverage until now - how a stored token is
-// (or isn't) trusted on load, what login/signup/logout actually do to
-// both state and localStorage. Mocks the module boundaries
-// (./api's token storage, ./endpoints' HTTP calls), same approach as
-// useBoard.test.ts - nothing *inside* AuthContext itself is faked.
+// (or isn't) trusted on load, what login/logout actually do to both
+// state and localStorage. Mocks the module boundaries (./api's token
+// storage, ./endpoints' HTTP calls), same approach as useBoard.test.ts
+// - nothing *inside* AuthContext itself is faked.
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
   return {
@@ -21,11 +21,10 @@ vi.mock("./api", async (importOriginal) => {
 vi.mock("./endpoints", () => ({
   getMe: vi.fn(),
   login: vi.fn(),
-  signup: vi.fn(),
 }));
 
 import { getStoredToken, setStoredToken } from "./api";
-import { getMe, login as loginRequest, signup as signupRequest } from "./endpoints";
+import { getMe, login as loginRequest } from "./endpoints";
 
 function wrapper({ children }: { children: ReactNode }) {
   return <AuthProvider>{children}</AuthProvider>;
@@ -35,6 +34,7 @@ const USER: SafeUser = {
   id: "u1",
   email: "person@example.com",
   displayName: "Person",
+  role: "MEMBER",
   createdAt: "",
 };
 
@@ -82,7 +82,10 @@ describe("AuthContext", () => {
 
   it("login() stores the token and becomes authenticated", async () => {
     vi.mocked(getStoredToken).mockReturnValue(null);
-    vi.mocked(loginRequest).mockResolvedValue({ user: USER, token: "fresh-token" });
+    vi.mocked(loginRequest).mockResolvedValue({
+      user: USER,
+      token: "fresh-token",
+    });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.status).toBe("anonymous"));
@@ -95,23 +98,6 @@ describe("AuthContext", () => {
     expect(setStoredToken).toHaveBeenCalledWith("fresh-token");
     expect(result.current.status).toBe("authenticated");
     expect(result.current.user).toEqual(USER);
-  });
-
-  it("signup() signs up, then logs in - never issues its own token (AUTH-01)", async () => {
-    vi.mocked(getStoredToken).mockReturnValue(null);
-    vi.mocked(signupRequest).mockResolvedValue({ user: USER });
-    vi.mocked(loginRequest).mockResolvedValue({ user: USER, token: "fresh-token" });
-
-    const { result } = renderHook(() => useAuth(), { wrapper });
-    await waitFor(() => expect(result.current.status).toBe("anonymous"));
-
-    await act(async () => {
-      await result.current.signup("person@example.com", "Person", "hunter2");
-    });
-
-    expect(signupRequest).toHaveBeenCalledWith("person@example.com", "Person", "hunter2");
-    expect(loginRequest).toHaveBeenCalledWith("person@example.com", "hunter2");
-    expect(result.current.status).toBe("authenticated");
   });
 
   it("logout() clears both the stored token and in-memory state", async () => {

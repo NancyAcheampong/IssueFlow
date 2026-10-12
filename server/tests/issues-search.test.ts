@@ -3,17 +3,16 @@ import request from "supertest";
 import type { Express } from "express";
 import { createApp } from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
+import { createTestUser } from "./helpers/createTestUser.js";
 
 const TEST_PASSWORD = "correct horse battery staple";
 
 async function signupAndLogin(app: Express, email: string, displayName: string) {
-  const signupResponse = await request(app).post("/api/v1/auth/signup").send({
-    email,
-    displayName,
-    password: TEST_PASSWORD,
-  });
-  const loginResponse = await request(app).post("/api/v1/auth/login").send({ email, password: TEST_PASSWORD });
-  return { userId: signupResponse.body.user.id as string, token: loginResponse.body.token as string };
+  const user = await createTestUser({ email, displayName, password: TEST_PASSWORD });
+  const loginResponse = await request(app)
+    .post("/api/v1/auth/login")
+    .send({ email, password: TEST_PASSWORD });
+  return { userId: user.id, token: loginResponse.body.token as string };
 }
 
 // SRC-01/02/03: keyword search and filters on GET
@@ -101,7 +100,11 @@ describe("GET /api/v1/projects/:projectId/issues - search & filters", () => {
     await request(app)
       .post(`/api/v1/projects/${projectId}/issues`)
       .set("Authorization", `Bearer ${ownerToken}`)
-      .send({ title: "Write onboarding docs", description: "Explain the signup flow", status: "DONE" });
+      .send({
+        title: "Write onboarding docs",
+        description: "Explain the signup flow",
+        status: "DONE",
+      });
 
     // A second, unrelated project with a *same-titled* issue -
     // proves search/filters never leak across project boundaries.

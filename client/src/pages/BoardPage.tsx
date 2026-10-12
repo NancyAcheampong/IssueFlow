@@ -25,6 +25,7 @@ import {
 } from "../lib/endpoints";
 import { ApiError } from "../lib/api";
 import { Column } from "../components/Column";
+import { AppHeader } from "../components/AppHeader";
 import styles from "./BoardPage.module.css";
 
 // SRC-01: 300ms - long enough to collapse a burst of keystrokes into
@@ -61,6 +62,7 @@ export function BoardPage() {
   const [creating, setCreating] = useState(false);
 
   const [isOwner, setIsOwner] = useState(false);
+  const [ownerId, setOwnerId] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviting, setInviting] = useState(false);
   const [memberError, setMemberError] = useState<string | null>(null);
@@ -103,9 +105,13 @@ export function BoardPage() {
         const project = projects.find(
           (candidate) => candidate.id === projectId,
         );
+        setOwnerId(project?.ownerId ?? null);
         setIsOwner(Boolean(project && user && project.ownerId === user.id));
       })
-      .catch(() => setIsOwner(false));
+      .catch(() => {
+        setOwnerId(null);
+        setIsOwner(false);
+      });
   }, [token, projectId, user]);
 
   const filters: IssueFilters = {
@@ -227,196 +233,209 @@ export function BoardPage() {
     : 0;
 
   return (
-    <div className={styles.boardPage}>
-      <header className={styles.boardHeader}>
-        <div className={styles.boardHeaderTitle}>
-          <Link to="/projects">&larr; Projects</Link>
-          {/* Oct 8 accessibility pass: every page needs exactly one
+    <>
+      <AppHeader />
+      <div className={styles.boardPage}>
+        <header className={styles.boardHeader}>
+          <div className={styles.boardHeaderTitle}>
+            <Link to="/projects">&larr; Projects</Link>
+            {/* Oct 8 accessibility pass: every page needs exactly one
               <h1> - this one was missing it entirely. The project's
               own name isn't fetched anywhere in the client yet (no
               GET /projects/:id endpoint exists to fetch a single
               project by id), so this is deliberately generic for now
               rather than a half-correct guess - see client/README.md
               Known gaps for the follow-up. */}
-          <h1>Board</h1>
-        </div>
-        <form
-          className={styles.newIssueForm}
-          onSubmit={(event) => {
-            event.preventDefault();
-            void handleCreateIssue();
-          }}
-        >
-          <input
-            value={newTitle}
-            onChange={(event) => setNewTitle(event.target.value)}
-            placeholder="New issue title"
-            aria-label="New issue title"
-          />
-          <button type="submit" disabled={creating || !newTitle.trim()}>
-            Add issue
-          </button>
-        </form>
-      </header>
-
-      <section className={styles.membersPanel} aria-label="Project members">
-        <h2>Members</h2>
-        <ul className={styles.membersList}>
-          {members.map((member) => (
-            <li key={member.id} className={styles.memberRow}>
-              <span className={styles.memberIdentity}>
-                <span
-                  className={styles.avatar}
-                  style={{ background: avatarColor(member.id) }}
-                  aria-hidden="true"
-                >
-                  {initial(member.displayName)}
-                </span>
-                <span className={styles.memberName}>{member.displayName}</span>
-                <span className={styles.memberEmail}>{member.email}</span>
-              </span>
-              {isOwner && member.id !== user?.id && (
-                <button
-                  type="button"
-                  onClick={() => void handleRemoveMember(member.id)}
-                >
-                  Remove
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-
-        {memberError && <p role="alert">{memberError}</p>}
-
-        {isOwner && (
-          <form onSubmit={handleInvite} className={styles.inviteForm}>
-            <label htmlFor="invite-email">Invite by email</label>
+            <h1>Board</h1>
+          </div>
+          <form
+            className={styles.newIssueForm}
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleCreateIssue();
+            }}
+          >
             <input
-              id="invite-email"
-              type="email"
-              value={inviteEmail}
-              onChange={(event) => setInviteEmail(event.target.value)}
-              placeholder="teammate@example.com"
+              value={newTitle}
+              onChange={(event) => setNewTitle(event.target.value)}
+              placeholder="New issue title"
+              aria-label="New issue title"
             />
-            <button type="submit" disabled={inviting || !inviteEmail.trim()}>
-              Invite
+            <button type="submit" disabled={creating || !newTitle.trim()}>
+              Add issue
             </button>
           </form>
-        )}
-      </section>
+        </header>
 
-      <section className={styles.filters} aria-label="Search and filter issues">
-        <input
-          type="search"
-          value={searchInput}
-          onChange={(event) => setSearchInput(event.target.value)}
-          placeholder="Search title or description"
-          aria-label="Search issues"
-          className={styles.filtersSearch}
-        />
-
-        <fieldset className={styles.filterGroup}>
-          <legend>Status</legend>
-          {ISSUE_STATUSES.map((status) => (
-            <label key={status} className={styles.filterCheckbox}>
-              <input
-                type="checkbox"
-                checked={statusFilter.includes(status)}
-                onChange={() =>
-                  setStatusFilter((current) => toggleValue(current, status))
-                }
-              />
-              {STATUS_LABELS[status]}
-            </label>
-          ))}
-        </fieldset>
-
-        {members.length > 0 && (
-          <fieldset className={styles.filterGroup}>
-            <legend>Assignee</legend>
+        <section className={styles.membersPanel} aria-label="Project members">
+          <h2>Members</h2>
+          <ul className={styles.membersList}>
             {members.map((member) => (
-              <label key={member.id} className={styles.filterCheckbox}>
+              <li key={member.id} className={styles.memberRow}>
+                <span className={styles.memberIdentity}>
+                  <span
+                    className={styles.avatar}
+                    style={{ background: avatarColor(member.id) }}
+                    aria-hidden="true"
+                  >
+                    {initial(member.displayName)}
+                  </span>
+                  <span className={styles.memberName}>
+                    {member.displayName}
+                  </span>
+                  {member.id === ownerId && (
+                    <span className={styles.ownerBadge}>Owner</span>
+                  )}
+                  <span className={styles.memberEmail}>{member.email}</span>
+                </span>
+                {isOwner && member.id !== user?.id && (
+                  <button
+                    type="button"
+                    onClick={() => void handleRemoveMember(member.id)}
+                  >
+                    Remove
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+
+          {memberError && <p role="alert">{memberError}</p>}
+
+          {isOwner && (
+            <form onSubmit={handleInvite} className={styles.inviteForm}>
+              <label htmlFor="invite-email">Invite by email</label>
+              <input
+                id="invite-email"
+                type="email"
+                value={inviteEmail}
+                onChange={(event) => setInviteEmail(event.target.value)}
+                placeholder="teammate@example.com"
+              />
+              <button type="submit" disabled={inviting || !inviteEmail.trim()}>
+                Invite
+              </button>
+            </form>
+          )}
+        </section>
+
+        <section
+          className={styles.filters}
+          aria-label="Search and filter issues"
+        >
+          <input
+            type="search"
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder="Search title or description"
+            aria-label="Search issues"
+            className={styles.filtersSearch}
+          />
+
+          <fieldset className={styles.filterGroup}>
+            <legend>Status</legend>
+            {ISSUE_STATUSES.map((status) => (
+              <label key={status} className={styles.filterCheckbox}>
                 <input
                   type="checkbox"
-                  checked={assigneeFilter.includes(member.id)}
+                  checked={statusFilter.includes(status)}
                   onChange={() =>
-                    setAssigneeFilter((current) =>
-                      toggleValue(current, member.id),
+                    setStatusFilter((current) => toggleValue(current, status))
+                  }
+                />
+                {STATUS_LABELS[status]}
+              </label>
+            ))}
+          </fieldset>
+
+          {members.length > 0 && (
+            <fieldset className={styles.filterGroup}>
+              <legend>Assignee</legend>
+              {members.map((member) => (
+                <label key={member.id} className={styles.filterCheckbox}>
+                  <input
+                    type="checkbox"
+                    checked={assigneeFilter.includes(member.id)}
+                    onChange={() =>
+                      setAssigneeFilter((current) =>
+                        toggleValue(current, member.id),
+                      )
+                    }
+                  />
+                  {member.displayName}
+                </label>
+              ))}
+            </fieldset>
+          )}
+
+          {labels.length > 0 && (
+            <fieldset className={styles.filterGroup}>
+              <legend>Label</legend>
+              {labels.map((label) => (
+                <label key={label.id} className={styles.filterCheckbox}>
+                  <input
+                    type="checkbox"
+                    checked={labelFilter.includes(label.id)}
+                    onChange={() =>
+                      setLabelFilter((current) =>
+                        toggleValue(current, label.id),
+                      )
+                    }
+                  />
+                  {label.name}
+                </label>
+              ))}
+            </fieldset>
+          )}
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              className={styles.filtersClear}
+              onClick={clearFilters}
+            >
+              Clear filters
+            </button>
+          )}
+        </section>
+
+        {error && (
+          <p role="alert" className={styles.boardError}>
+            {error}
+          </p>
+        )}
+
+        {loading && <p>Loading board…</p>}
+
+        {!loading && board && totalCards === 0 && (
+          <p className={styles.boardEmpty}>
+            {hasActiveFilters
+              ? "No issues match these filters."
+              : "No issues yet — add one above."}
+          </p>
+        )}
+
+        {board && (
+          <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+            <div className={styles.boardColumns}>
+              {ISSUE_STATUSES.map((status) => (
+                <Column
+                  key={status}
+                  status={status}
+                  issues={board[status]}
+                  onMoveToColumn={(issueId, destinationStatus) =>
+                    void moveCard(
+                      issueId,
+                      destinationStatus,
+                      board[destinationStatus].length,
                     )
                   }
                 />
-                {member.displayName}
-              </label>
-            ))}
-          </fieldset>
+              ))}
+            </div>
+          </DndContext>
         )}
-
-        {labels.length > 0 && (
-          <fieldset className={styles.filterGroup}>
-            <legend>Label</legend>
-            {labels.map((label) => (
-              <label key={label.id} className={styles.filterCheckbox}>
-                <input
-                  type="checkbox"
-                  checked={labelFilter.includes(label.id)}
-                  onChange={() =>
-                    setLabelFilter((current) => toggleValue(current, label.id))
-                  }
-                />
-                {label.name}
-              </label>
-            ))}
-          </fieldset>
-        )}
-
-        {hasActiveFilters && (
-          <button
-            type="button"
-            className={styles.filtersClear}
-            onClick={clearFilters}
-          >
-            Clear filters
-          </button>
-        )}
-      </section>
-
-      {error && (
-        <p role="alert" className={styles.boardError}>
-          {error}
-        </p>
-      )}
-
-      {loading && <p>Loading board…</p>}
-
-      {!loading && board && totalCards === 0 && (
-        <p className={styles.boardEmpty}>
-          {hasActiveFilters
-            ? "No issues match these filters."
-            : "No issues yet — add one above."}
-        </p>
-      )}
-
-      {board && (
-        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-          <div className={styles.boardColumns}>
-            {ISSUE_STATUSES.map((status) => (
-              <Column
-                key={status}
-                status={status}
-                issues={board[status]}
-                onMoveToColumn={(issueId, destinationStatus) =>
-                  void moveCard(
-                    issueId,
-                    destinationStatus,
-                    board[destinationStatus].length,
-                  )
-                }
-              />
-            ))}
-          </div>
-        </DndContext>
-      )}
-    </div>
+      </div>
+    </>
   );
 }

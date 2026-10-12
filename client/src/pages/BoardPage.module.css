@@ -48,8 +48,10 @@
 
 .boardEmpty {
   color: var(--text-muted);
-  padding: var(--space-8) 0;
+  padding: var(--space-8) var(--space-4);
   text-align: center;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
 }
 
 .membersPanel {
@@ -116,6 +118,18 @@
 .memberEmail {
   color: var(--text-faint);
   font-size: var(--fs-xs);
+}
+
+.ownerBadge {
+  flex: 0 0 auto;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
 }
 
 .memberRow button {

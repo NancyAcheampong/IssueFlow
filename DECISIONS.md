@@ -803,4 +803,82 @@ one-off Playwright verifications in this file.
 
 ---
 
-_Last updated: Oct 12 (pre-deploy live-testing pass — see git log)._
+## D-32 (local) — Oct 12: no public signup — IssueFlow is admin-provisioned
+
+**Decision:** `POST /api/v1/auth/signup` is gone. The server seeds
+exactly one `ADMIN` account at startup from `ADMIN_EMAIL`/
+`ADMIN_PASSWORD` (`src/lib/seedAdmin.ts`, idempotent - safe on every
+restart, never silently overwrites a password that already exists).
+From there, every other account is created via `POST
+/api/v1/admin/users`, gated by a new `requireAdmin` middleware on top
+of `requireAuth`. `User.role` (`ADMIN | MEMBER`, new enum + migration)
+is the site-wide role, distinct from `ProjectMembership.role` (per-
+project `OWNER`/`MEMBER` - D-06 etc.), same lowercase-in-Postgres/
+SCREAMING_CASE-in-TS split as that enum.
+
+**Why:** explicit product requirement - IssueFlow is an internal
+workplace tool, not a public product; accounts should be handed out by
+whoever administers it, not self-registered by anyone who finds the
+URL.
+
+**Why `requireAdmin` re-checks the database instead of trusting a JWT
+claim:** `src/lib/jwt.ts`'s payload has been deliberately minimal
+(just `sub`) since Phase 1, specifically so nothing in it can go
+stale - a name or email baked into the token would outlive a profile
+edit. Role freshness matters even more for an *admin* gate: a demoted
+admin's already-issued, still-valid token shouldn't keep granting
+admin access for up to `JWT_EXPIRES_IN` just because the demotion
+happened after the token was signed. So `requireAdmin` looks the
+role up fresh on every request instead, the same "look it up when it
+actually matters" tradeoff `GET /me` already makes for user data in
+general (see `requireAuth.ts`'s own comment) - admin-gated routes are
+rare enough that the extra query is a cheap price for that guarantee.
+
+**What moved where:** `createUser` (hash, insert, translate the
+unique-constraint conflict - unchanged logic) moved from
+`modules/auth` to a new `modules/admin/adminUsers.*`, since account
+creation is an admin action now, not an auth action.
+`auth.schemas.ts`'s old `signupSchema` is `adminUsers.schemas.ts`'s
+`createUserSchema`, same shape. `auth.service.ts` keeps only
+`verifyCredentials` (login).
+
+**Test-suite ripple:** every test file that used to `POST
+/api/v1/auth/signup` to set up a fixture account needed a different
+way to get a user into the database, since that route no longer
+exists. New shared helper `tests/helpers/createTestUser.ts` inserts
+directly via Prisma (same "arrange via DB, act/assert via real HTTP"
+split `tests/project.test.ts`/`tests/user.test.ts` already used before
+this change, just promoted to every file that needs it now) -
+deliberately *not* a call to the real `createUser` service function,
+so that function's own coverage stays concentrated and deliberate in
+one place (`tests/adminUsers.test.ts`, which replaces the signup
+assertions that used to live in `tests/auth.test.ts`, plus the new
+401/403 authorization-boundary checks that didn't exist before
+account creation was gated at all). 9 test files touched; full suite
+re-verified green after (190 tests) - see `server/README.md`'s Tests
+section for what `adminUsers.test.ts` and the trimmed `auth.test.ts`
+each cover now.
+
+**Frontend:** `SignupPage` deleted. A new admin-only `CreateUserPage`
+(`/admin`, gated by a new `RequireAdmin` route guard parallel to
+`RequireAuth`) reuses the same field-level validation-error pattern
+`SignupPage` had, plus a roster of existing users (`GET
+/api/v1/admin/users`) so the admin has visibility into who already has
+an account before creating a duplicate. `AppHeader` shows a "Create
+user" link only when `user.role === "ADMIN"` - hiding the entry point
+isn't the actual security boundary (the server-side 403 is), just
+avoids showing a control that would just fail for anyone else.
+
+**Verified live:** admin logs in with the seeded credentials, creates
+a new account through `/admin`, logs out, logs back in as that new
+account with the password the admin set, confirms it does *not* see
+the "Create user" link, confirms visiting `/admin` directly redirects
+away, and confirms calling `POST /api/v1/admin/users` directly (not
+through the UI) as that non-admin account still 403s - the hidden nav
+link isn't load-bearing. 11/11 checks passed, alongside a clean
+build/lint/190-test run on the server and build/lint/25-test run on
+the client.
+
+---
+
+_Last updated: Oct 12 (admin-provisioned accounts — see git log)._

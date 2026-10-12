@@ -9,12 +9,8 @@ import type {
   SafeUser,
 } from "./types";
 
-export function signup(email: string, displayName: string, password: string) {
-  return apiRequest<{ user: SafeUser }>("/auth/signup", {
-    method: "POST",
-    body: { email, displayName, password },
-  });
-}
+// POST /auth/signup removed (Oct 12) - IssueFlow has no public signup.
+// Account creation is now createUser() below, admin-only.
 
 export function login(email: string, password: string) {
   return apiRequest<{ user: SafeUser; token: string }>("/auth/login", {
@@ -132,4 +128,24 @@ export function removeMember(token: string, projectId: string, userId: string) {
     method: "DELETE",
     token,
   });
+}
+
+// Admin-only account provisioning (Oct 12) - replaces the old public
+// signup. createUser sets the account's initial password directly;
+// there's no invite/email flow.
+export function createUser(
+  token: string,
+  email: string,
+  displayName: string,
+  password: string,
+) {
+  return apiRequest<{ user: SafeUser }>("/admin/users", {
+    method: "POST",
+    token,
+    body: { email, displayName, password },
+  });
+}
+
+export function listUsers(token: string) {
+  return apiRequest<{ users: SafeUser[] }>("/admin/users", { token });
 }

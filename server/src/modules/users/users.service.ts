@@ -1,3 +1,4 @@
+import type { UserRole } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../lib/AppError.js";
 
@@ -7,15 +8,32 @@ import { AppError } from "../../lib/AppError.js";
 // row, so passwordHash can never accidentally leak into a response.
 // Lives here (not in the auth module) because it's about the User model
 // generally - both auth.service.ts and GET /me need it.
+//
+// `role` is included (Oct 12) so the client can show/hide admin-only UI
+// (e.g. "Create user") without a separate lookup - it's not sensitive,
+// same reasoning as exposing displayName.
 export interface SafeUser {
   id: string;
   email: string;
   displayName: string;
+  role: UserRole;
   createdAt: Date;
 }
 
-export function toSafeUser(user: { id: string; email: string; displayName: string; createdAt: Date }): SafeUser {
-  return { id: user.id, email: user.email, displayName: user.displayName, createdAt: user.createdAt };
+export function toSafeUser(user: {
+  id: string;
+  email: string;
+  displayName: string;
+  role: UserRole;
+  createdAt: Date;
+}): SafeUser {
+  return {
+    id: user.id,
+    email: user.email,
+    displayName: user.displayName,
+    role: user.role,
+    createdAt: user.createdAt,
+  };
 }
 
 export async function getUserById(id: string): Promise<SafeUser> {

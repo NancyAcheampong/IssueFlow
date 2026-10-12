@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { ApiError } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 import { usePageTitle } from "../lib/usePageTitle";
-import styles from "./AuthPages.module.css";
+import styles from "./LoginPage.module.css";
 
 export function LoginPage() {
   usePageTitle("Log in");
@@ -63,7 +63,7 @@ export function LoginPage() {
           </button>
         </form>
         <p className={styles.footer}>
-          No account yet? <Link to="/signup">Sign up</Link>
+          No account? Ask your administrator to create one for you.
         </p>
       </div>
     </main>

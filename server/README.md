@@ -37,9 +37,10 @@ Error responses always use one envelope shape (spec API-03):
 | ------ | --------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | GET    | `/health`                                     | Public            | Liveness only, no dependencies checked                                                                                                                                                                                                                                                                           |
 | GET    | `/api/v1/status`                              | Public            | Readiness — also checks the database                                                                                                                                                                                                                                                                             |
-| POST   | `/api/v1/auth/signup`                         | Public            | AUTH-01. Does **not** issue a JWT — signup and login are deliberately separate steps; call login next. Rate-limited (20/15min per IP — D-27).                                                                                                                                                                    |
 | POST   | `/api/v1/auth/login`                          | Public            | AUTH-02. Verifies credentials, returns `{ user, token }`. Wrong password and unknown email return the identical error (AUTH-07 — no account enumeration). Rate-limited (20/15min per IP — D-27, resolving D-10's deferred item).                                                                               |
 | GET    | `/api/v1/me`                                  | **Authenticated** | AUTH-04. First protected route — requires `Authorization: Bearer <token>`, via `requireAuth` middleware.                                                                                                                                                                                                         |
+| POST   | `/api/v1/admin/users`                         | **Admin only**    | D-32. Replaces the old public signup — IssueFlow has no self-service account creation. Same email/displayName/password shape signup used to take; the admin sets the account's initial password directly. Rate-limited same as login.                                                                          |
+| GET    | `/api/v1/admin/users`                         | **Admin only**    | D-32. Full user roster, so the admin has somewhere to see who already has an account.                                                                                                                                                                                                                            |
 | POST   | `/api/v1/projects`                            | **Authenticated** | PRJ-01. Creator becomes owner + first member (two rows written atomically — see DECISIONS.md D-11).                                                                                                                                                                                                              |
 | GET    | `/api/v1/projects`                            | **Authenticated** | PRJ-02. Only projects the requester belongs to.                                                                                                                                                                                                                                                                  |
 | POST   | `/api/v1/projects/:projectId/members`         | **Owner only**    | PRJ-03. Non-member → 404; member-but-not-owner → 403 (see DECISIONS.md D-06).                                                                                                                                                                                                                                    |
@@ -86,10 +87,16 @@ server). See DECISIONS.md D-24/D-25.
 Every route carries `requireAuth` plus the correct scoped
 authorization check (`getProjectMembership` or `getIssueById`,
 depending on whether the route is project- or issue-scoped) — audited
-route by route, not assumed. `/auth/signup` and `/auth/login` are
+route by route, not assumed. `/admin/users` and `/auth/login` are
 rate-limited (`src/middleware/authRateLimit.ts`, 20 requests/15min per
 IP), disabled in the test environment so this suite's own rapid
-signup/login traffic doesn't trip it. CORS (both REST and the Socket.IO
+login/account-creation traffic doesn't trip it. `requireAdmin`
+(`src/middleware/requireAdmin.ts`) re-reads the caller's role from the
+database on every admin-gated request rather than trusting a JWT
+claim — the JWT payload is deliberately minimal (just `sub`, see
+`src/lib/jwt.ts`) specifically so nothing in it can go stale; a
+demoted admin's still-valid token shouldn't keep working for up to
+`JWT_EXPIRES_IN`. CORS (both REST and the Socket.IO
 handshake) is locked to `ALLOWED_ORIGIN`, never a wildcard — verified
 live (a configured origin gets `Access-Control-Allow-Origin` echoed
 back, an arbitrary one doesn't) and covered by `tests/cors.test.ts`.
@@ -114,7 +121,8 @@ npm install
 
 # 3. Configure environment
 cp .env.example .env
-# edit .env if you changed any defaults, and set a real JWT_SECRET
+# edit .env: set a real JWT_SECRET, and set ADMIN_EMAIL/ADMIN_PASSWORD
+# to whatever you want your own admin login to be
 
 # 4. Set up both local databases (dev + test), safe to re-run any time
 npm run setup:db
@@ -122,6 +130,12 @@ npm run setup:db
 # 5. Run the dev server (auto-restarts on change)
 npm run dev
 ```
+
+There's no signup — log in with whatever `ADMIN_EMAIL`/`ADMIN_PASSWORD`
+you set in step 3 (the server creates that account automatically the
+first time it starts against a fresh database; see D-32). From there,
+the admin provisions every other account via `POST /api/v1/admin/users`
+(or the client's `/admin` page).
 
 `setup:db` runs `scripts/setup-local-db.sh` — creates the `issueflow` and
 `issueflow_test` databases if they don't exist, fixes schema permissions
@@ -212,6 +226,8 @@ See `.env.example` for the full list with comments. Summary:
 | `DATABASE_URL`   | Postgres connection string (Prisma format)               |
 | `JWT_SECRET`     | Signing secret for auth tokens (Phase 1)                 |
 | `JWT_EXPIRES_IN` | Access token lifetime                                    |
+| `ADMIN_EMAIL`    | Seeded admin account's email (D-32) — no public signup   |
+| `ADMIN_PASSWORD` | Seeded admin account's initial password                  |
 | `ALLOWED_ORIGIN` | Comma-separated list of frontend origins allowed by CORS |
 | `LOG_LEVEL`      | pino log level                                           |
 
@@ -231,12 +247,21 @@ Current coverage:
 - `tests/user.test.ts` — integration test against a real database (see
   "Test database" below): creates/reads a `User` and proves the unique
   email constraint from the migration is actually enforced
-- `tests/auth.test.ts` — full signup and login flow through the real HTTP
-  app: password is actually bcrypt-hashed (and verifies against the
-  original), never returned in any response, email gets normalized,
-  duplicate signups are rejected with 409, a real JWT comes back on login
-  and decodes to the right user, and wrong-password vs. unknown-email
-  produce the exact same error (no account enumeration)
+- `tests/auth.test.ts` — login through the real HTTP app: a real JWT
+  comes back and decodes to the right user, wrong-password vs.
+  unknown-email produce the exact same error (no account enumeration),
+  a missing password is a validation error. Fixture accounts are
+  created via `tests/helpers/createTestUser.ts` (direct Prisma insert),
+  not HTTP — there's no public signup to call (D-32).
+- `tests/adminUsers.test.ts` — `POST`/`GET /api/v1/admin/users` through
+  the real HTTP app, as an actual admin: creates a user whose password
+  is really bcrypt-hashed (verifies against the original) and never
+  returned in any response, email gets normalized, a duplicate email is
+  rejected with 409, invalid input is a 400. Also proves the
+  authorization boundary that's new with D-32: an unauthenticated
+  request is 401, and a real logged-in non-admin member's request is
+  403 - account creation isn't just moved behind *a* login, it's
+  genuinely admin-gated.
 - `tests/authRateLimit.test.ts` — proves the Oct 6/D-27 rate limiter
   actually enforces its threshold (not just that it's configured):
   `createAuthRateLimit({ skip: false })` mounted on a throwaway Express
@@ -264,8 +289,8 @@ Current coverage:
   token signed with the wrong secret are all rejected; a valid token
   attaches `req.userId` and lets the request through
 - `tests/me.test.ts` — `GET /api/v1/me` through the real HTTP app with a
-  genuine signup+login token: returns the right user with no
-  `passwordHash`, rejects a missing token and an invalid one
+  genuine login token: returns the right user with no `passwordHash`,
+  rejects a missing token and an invalid one
 - `tests/project.test.ts` — Prisma-level: creates a project + owner
   membership together, proves the composite key rejects a duplicate
   membership, proves deleting a project cascades to its memberships

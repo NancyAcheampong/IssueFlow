@@ -6,6 +6,7 @@ import { io as ioClient, type Socket as ClientSocket } from "socket.io-client";
 import { createApp } from "../src/app.js";
 import { attachRealtime } from "../src/realtime/socket.js";
 import { prisma } from "../src/lib/prisma.js";
+import { createTestUser } from "./helpers/createTestUser.js";
 
 // Phase 5/D-24/D-25: unlike every other test file in this suite, this
 // one needs a *real* listening HTTP server (Supertest's "pass the app
@@ -36,17 +37,21 @@ describe("Realtime (Socket.IO)", () => {
     const port = typeof address === "object" && address !== null ? address.port : 0;
     baseUrl = `http://localhost:${port}`;
 
-    await request(app)
-      .post("/api/v1/auth/signup")
-      .send({ email: memberEmail, displayName: "Realtime Member", password: TEST_PASSWORD });
+    await createTestUser({
+      email: memberEmail,
+      displayName: "Realtime Member",
+      password: TEST_PASSWORD,
+    });
     const memberLogin = await request(app)
       .post("/api/v1/auth/login")
       .send({ email: memberEmail, password: TEST_PASSWORD });
     memberToken = memberLogin.body.token;
 
-    await request(app)
-      .post("/api/v1/auth/signup")
-      .send({ email: outsiderEmail, displayName: "Realtime Outsider", password: TEST_PASSWORD });
+    await createTestUser({
+      email: outsiderEmail,
+      displayName: "Realtime Outsider",
+      password: TEST_PASSWORD,
+    });
     const outsiderLogin = await request(app)
       .post("/api/v1/auth/login")
       .send({ email: outsiderEmail, password: TEST_PASSWORD });
@@ -135,7 +140,9 @@ describe("Realtime (Socket.IO)", () => {
       socket.emit("join", projectId);
     });
 
-    const changePromise = new Promise<{ type: string }>((resolve) => socket.on("project:changed", resolve));
+    const changePromise = new Promise<{ type: string }>((resolve) =>
+      socket.on("project:changed", resolve),
+    );
 
     await request(app)
       .post(`/api/v1/projects/${projectId}/issues`)
