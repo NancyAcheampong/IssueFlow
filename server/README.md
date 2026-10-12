@@ -81,7 +81,7 @@ server). See DECISIONS.md D-24/D-25.
 | Client → Server | `leave`          | `projectId: string`            | Leaves the room.                                                                                                       |
 | Server → Client | `project:changed`| `{ type: "issue" \| "comment" \| "label" }` | Broadcast to everyone in the project's room after a write commits. Carries no record data on purpose — D-25. |
 
-## Security (Oct 6 review — D-27)
+## Security (Oct 6 review — D-27; Oct 9 — D-30)
 
 Every route carries `requireAuth` plus the correct scoped
 authorization check (`getProjectMembership` or `getIssueById`,
@@ -90,9 +90,16 @@ route by route, not assumed. `/auth/signup` and `/auth/login` are
 rate-limited (`src/middleware/authRateLimit.ts`, 20 requests/15min per
 IP), disabled in the test environment so this suite's own rapid
 signup/login traffic doesn't trip it. CORS (both REST and the Socket.IO
-handshake) is locked to `ALLOWED_ORIGIN`, never a wildcard. Error
-responses never leak a stack trace or internal message in production.
-All ids are `cuid()` — not sequential, not practically guessable.
+handshake) is locked to `ALLOWED_ORIGIN`, never a wildcard — verified
+live (a configured origin gets `Access-Control-Allow-Origin` echoed
+back, an arbitrary one doesn't) and covered by `tests/cors.test.ts`.
+Error responses never leak a stack trace or internal message in
+production. All ids are `cuid()` — not sequential, not practically
+guessable. Request logging (`src/lib/logger.ts`) redacts
+`Authorization`/`Cookie` headers — found live (Oct 9) that every
+authenticated request was writing its full bearer JWT to stdout in
+plain text via `pino-http`'s default header logging, with nothing
+telling it not to; see DECISIONS.md D-30 and `tests/logger.test.ts`.
 
 ## Local setup
 
@@ -227,6 +234,20 @@ Current coverage:
   export (as wired into `/auth/*`) is correctly a no-op in the test
   environment - 25 requests through it all succeed, which is what
   keeps the rest of this suite from being flaky.
+- `tests/logger.test.ts` — proves the Oct 9/D-30 log redaction against
+  the *real* exported `LOG_REDACT_CONFIG` (not a hand-copied duplicate
+  that could drift): a fake `Authorization` header's value is actually
+  gone from the log output, replaced with `[REDACTED]`, not just
+  masked in some cosmetic way; a `Cookie` header redacts the same way;
+  an ordinary header (`user-agent`) is confirmed to survive untouched,
+  proving this isn't just stripping all headers wholesale.
+- `tests/cors.test.ts` — the configured origin gets
+  `Access-Control-Allow-Origin` echoed back on a preflight request; an
+  arbitrary origin does not (the header is absent, not an error
+  response - that's the actual mechanism, enforced by the requesting
+  browser); `Access-Control-Allow-Credentials` is sent, required for
+  this app's Authorization-header auth model to work cross-origin at
+  all.
 - `tests/requireAuth.test.ts` — unit tests for the auth middleware
   directly: no header, wrong scheme, garbage token, expired token, and a
   token signed with the wrong secret are all rejected; a valid token

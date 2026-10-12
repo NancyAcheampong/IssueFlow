@@ -713,4 +713,50 @@ not just the one that found it.
 
 ---
 
-_Last updated: Phase 7 batch, Oct 6-8 (security review through accessibility — see git log for the day-by-day breakdown)._
+## D-30 (local) — Oct 9: a real one found in logging, migrations and CORS confirmed solid
+
+**Decision (the actual fix):** `logger.ts` now redacts
+`req.headers.authorization` and `req.headers.cookie` (pino's `redact`
+option, `censor: "[REDACTED]"`) before anything reaches stdout.
+
+**Why this was a bug, not hardening-for-hardening's-sake:** `pino-http`
+(wired in `app.ts` since Phase 0) logs every request's headers via
+pino's standard serializer - which includes `Authorization` verbatim,
+with nothing in this codebase telling it not to. Found live (Oct 9) by
+making a real authenticated request and reading the actual log output,
+not by reasoning about pino-http's defaults from memory: every
+authenticated request was writing the caller's live bearer JWT to
+stdout in plain text. Anyone with read access to logs - a log
+aggregator, a leaked log file, a misconfigured dashboard - could lift
+a still-valid token straight out of them and impersonate that session
+until it expires (`JWT_EXPIRES_IN`, default 1 day). `LOG_REDACT_CONFIG`
+is exported separately from the `pino()` call specifically so
+`tests/logger.test.ts` exercises the *real* config object directly
+(building its own pino instance against it, writing to a capturable
+in-memory stream) rather than a hand-copied duplicate that could
+silently drift from what's actually running.
+
+**Also checked and confirmed already correct, both by reading the code
+and by exercising it live** (not new work - verification, same as
+D-27's pass):
+
+- **Migrations**: `prisma migrate status` reports zero drift between
+  `schema.prisma` and the applied migration history. `prisma migrate
+  deploy` (the production-safe command - `scripts/setup-local-db.sh`
+  already used this, not `migrate dev`, which is correct) was run
+  against a disposable, genuinely-from-zero database today and applied
+  all 4 migrations cleanly, producing exactly the 9 expected
+  application tables plus Prisma's own migration-tracking table.
+- **CORS**: a live preflight request from the configured origin
+  (`ALLOWED_ORIGIN`) gets `Access-Control-Allow-Origin` echoed back; the
+  identical request from an arbitrary origin (`evil.example`) gets a
+  204 with that header *absent* - which is the correct mechanism (CORS
+  is enforced by the requesting browser refusing to expose the
+  response to page JavaScript when the header is missing, not by the
+  server 403ing the request itself). `tests/cors.test.ts` is new today
+  - this had no test coverage before, despite being exactly the kind
+  of thing a "CORS lockdown" day should leave behind a test for.
+
+---
+
+_Last updated: Phase 7 batch, Oct 6-9 (security review through finalize-migrations-logging-CORS — see git log for the day-by-day breakdown)._
