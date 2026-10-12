@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 import { usePageTitle } from "../lib/usePageTitle";
+import styles from "./AuthPages.module.css";
 
 export function LoginPage() {
   usePageTitle("Log in");
@@ -31,7 +32,7 @@ export function LoginPage() {
   }
 
   return (
-    <main className="auth-page">
+    <main className={styles.authPage}>
       <h1>Log in</h1>
       <form onSubmit={handleSubmit}>
         <label>

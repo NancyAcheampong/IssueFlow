@@ -25,6 +25,7 @@ import {
 } from "../lib/endpoints";
 import { ApiError } from "../lib/api";
 import { Column } from "../components/Column";
+import styles from "./BoardPage.module.css";
 
 // SRC-01: 300ms - long enough to collapse a burst of keystrokes into
 // one request (nobody actually wants a fetch fired mid-word), short
@@ -211,9 +212,9 @@ export function BoardPage() {
     : 0;
 
   return (
-    <div className="board-page">
-      <header className="board-header">
-        <div className="board-header-title">
+    <div className={styles.boardPage}>
+      <header className={styles.boardHeader}>
+        <div className={styles.boardHeaderTitle}>
           <Link to="/projects">&larr; Projects</Link>
           {/* Oct 8 accessibility pass: every page needs exactly one
               <h1> - this one was missing it entirely. The project's
@@ -225,7 +226,7 @@ export function BoardPage() {
           <h1>Board</h1>
         </div>
         <form
-          className="new-issue-form"
+          className={styles.newIssueForm}
           onSubmit={(event) => {
             event.preventDefault();
             void handleCreateIssue();
@@ -243,14 +244,14 @@ export function BoardPage() {
         </form>
       </header>
 
-      <section className="members-panel" aria-label="Project members">
+      <section className={styles.membersPanel} aria-label="Project members">
         <h2>Members</h2>
-        <ul className="members-list">
+        <ul className={styles.membersList}>
           {members.map((member) => (
-            <li key={member.id} className="member-row">
+            <li key={member.id} className={styles.memberRow}>
               <span>
                 {member.displayName}{" "}
-                <span className="member-email">({member.email})</span>
+                <span className={styles.memberEmail}>({member.email})</span>
               </span>
               {isOwner && member.id !== user?.id && (
                 <button
@@ -267,7 +268,7 @@ export function BoardPage() {
         {memberError && <p role="alert">{memberError}</p>}
 
         {isOwner && (
-          <form onSubmit={handleInvite} className="invite-form">
+          <form onSubmit={handleInvite} className={styles.inviteForm}>
             <label htmlFor="invite-email">Invite by email</label>
             <input
               id="invite-email"
@@ -283,20 +284,20 @@ export function BoardPage() {
         )}
       </section>
 
-      <section className="filters" aria-label="Search and filter issues">
+      <section className={styles.filters} aria-label="Search and filter issues">
         <input
           type="search"
           value={searchInput}
           onChange={(event) => setSearchInput(event.target.value)}
           placeholder="Search title or description"
           aria-label="Search issues"
-          className="filters-search"
+          className={styles.filtersSearch}
         />
 
-        <fieldset className="filter-group">
+        <fieldset className={styles.filterGroup}>
           <legend>Status</legend>
           {ISSUE_STATUSES.map((status) => (
-            <label key={status} className="filter-checkbox">
+            <label key={status} className={styles.filterCheckbox}>
               <input
                 type="checkbox"
                 checked={statusFilter.includes(status)}
@@ -310,10 +311,10 @@ export function BoardPage() {
         </fieldset>
 
         {members.length > 0 && (
-          <fieldset className="filter-group">
+          <fieldset className={styles.filterGroup}>
             <legend>Assignee</legend>
             {members.map((member) => (
-              <label key={member.id} className="filter-checkbox">
+              <label key={member.id} className={styles.filterCheckbox}>
                 <input
                   type="checkbox"
                   checked={assigneeFilter.includes(member.id)}
@@ -330,10 +331,10 @@ export function BoardPage() {
         )}
 
         {labels.length > 0 && (
-          <fieldset className="filter-group">
+          <fieldset className={styles.filterGroup}>
             <legend>Label</legend>
             {labels.map((label) => (
-              <label key={label.id} className="filter-checkbox">
+              <label key={label.id} className={styles.filterCheckbox}>
                 <input
                   type="checkbox"
                   checked={labelFilter.includes(label.id)}
@@ -350,7 +351,7 @@ export function BoardPage() {
         {hasActiveFilters && (
           <button
             type="button"
-            className="filters-clear"
+            className={styles.filtersClear}
             onClick={clearFilters}
           >
             Clear filters
@@ -359,7 +360,7 @@ export function BoardPage() {
       </section>
 
       {error && (
-        <p role="alert" className="board-error">
+        <p role="alert" className={styles.boardError}>
           {error}
         </p>
       )}
@@ -367,7 +368,7 @@ export function BoardPage() {
       {loading && <p>Loading board…</p>}
 
       {!loading && board && totalCards === 0 && (
-        <p className="board-empty">
+        <p className={styles.boardEmpty}>
           {hasActiveFilters
             ? "No issues match these filters."
             : "No issues yet — add one above."}
@@ -376,7 +377,7 @@ export function BoardPage() {
 
       {board && (
         <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-          <div className="board-columns">
+          <div className={styles.boardColumns}>
             {ISSUE_STATUSES.map((status) => (
               <Column
                 key={status}

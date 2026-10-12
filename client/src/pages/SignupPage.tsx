@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 import { usePageTitle } from "../lib/usePageTitle";
+import styles from "./AuthPages.module.css";
 
 export function SignupPage() {
   usePageTitle("Sign up");
@@ -36,7 +37,7 @@ export function SignupPage() {
   }
 
   return (
-    <main className="auth-page">
+    <main className={styles.authPage}>
       <h1>Sign up</h1>
       <form onSubmit={handleSubmit}>
         <label htmlFor="displayName">Display name</label>
@@ -46,10 +47,16 @@ export function SignupPage() {
           onChange={(event) => setDisplayName(event.target.value)}
           required
           aria-invalid={Boolean(fieldErrors.displayName)}
-          aria-describedby={fieldErrors.displayName ? "displayName-error" : undefined}
+          aria-describedby={
+            fieldErrors.displayName ? "displayName-error" : undefined
+          }
         />
         {fieldErrors.displayName && (
-          <span className="field-error" id="displayName-error" role="alert">
+          <span
+            className={styles.fieldError}
+            id="displayName-error"
+            role="alert"
+          >
             {fieldErrors.displayName}
           </span>
         )}
@@ -65,7 +72,7 @@ export function SignupPage() {
           aria-describedby={fieldErrors.email ? "email-error" : undefined}
         />
         {fieldErrors.email && (
-          <span className="field-error" id="email-error" role="alert">
+          <span className={styles.fieldError} id="email-error" role="alert">
             {fieldErrors.email}
           </span>
         )}
@@ -81,7 +88,7 @@ export function SignupPage() {
           aria-describedby={fieldErrors.password ? "password-error" : undefined}
         />
         {fieldErrors.password && (
-          <span className="field-error" id="password-error" role="alert">
+          <span className={styles.fieldError} id="password-error" role="alert">
             {fieldErrors.password}
           </span>
         )}

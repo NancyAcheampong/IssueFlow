@@ -1,0 +1,38 @@
+.column {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  min-width: 16rem;
+  flex: 1 1 16rem;
+}
+
+.column h2 {
+  font-size: 0.95rem;
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 0.5rem;
+}
+
+.columnCount {
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
+.columnList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 2rem;
+}
+
+@media (max-width: 640px) {
+  .column {
+    min-width: 85vw;
+    flex: 0 0 85vw;
+    scroll-snap-align: start;
+  }
+}

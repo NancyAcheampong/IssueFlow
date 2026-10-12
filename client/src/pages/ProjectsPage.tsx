@@ -5,6 +5,7 @@ import { useAuth } from "../lib/AuthContext";
 import { usePageTitle } from "../lib/usePageTitle";
 import { createProject, listProjects } from "../lib/endpoints";
 import type { Project } from "../lib/types";
+import styles from "./ProjectsPage.module.css";
 
 export function ProjectsPage() {
   usePageTitle("Projects");
@@ -45,7 +46,7 @@ export function ProjectsPage() {
   }
 
   return (
-    <main className="projects-page">
+    <main className={styles.projectsPage}>
       <header>
         <h1>Projects</h1>
         <p>
@@ -56,7 +57,7 @@ export function ProjectsPage() {
         </p>
       </header>
 
-      <form onSubmit={handleCreate} className="new-project-form">
+      <form onSubmit={handleCreate} className={styles.newProjectForm}>
         <input
           value={newName}
           onChange={(event) => setNewName(event.target.value)}
@@ -71,7 +72,7 @@ export function ProjectsPage() {
       {error && <p role="alert">{error}</p>}
       {loading && <p>Loading…</p>}
 
-      <ul className="project-list">
+      <ul className={styles.projectList}>
         {projects.map((project) => (
           <li key={project.id}>
             <Link to={`/projects/${project.id}/board`}>{project.name}</Link>

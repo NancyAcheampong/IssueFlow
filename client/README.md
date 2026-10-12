@@ -58,6 +58,22 @@ found live when exactly this happened during manual testing.
 
 ## Architecture
 
+- **Styling: CSS Modules, one file per component (Oct 12).** Every
+  component/page owns a `Name.module.css` imported as `styles` and
+  referenced as `styles.thing` - class names are scoped to that file
+  automatically (Vite's built-in CSS Modules support, no extra
+  config), so two components can both have a `.card` class without
+  colliding. `src/index.css` is intentionally small now - only truly
+  global concerns live there: design tokens (`:root` custom
+  properties), element resets (`*`, `body`, `a`, `button`), and the
+  `[role="alert"]`/`@media (pointer: coarse)` rules that apply
+  everywhere rather than to one component. `LoginPage` and
+  `SignupPage` share one `AuthPages.module.css` since they're
+  genuinely the same page shell; every other component has its own.
+  This is the styling *foundation* for an upcoming visual redesign,
+  not the redesign itself - today's migration was a faithful 1:1 port
+  (verified with Playwright screenshots, pixel-identical output)
+  before any new visual work lands on top of it.
 - `src/lib/api.ts` - a thin `fetch` wrapper matching the server's one
   documented error envelope (`{ error: { code, message, fields? } }`);
   every call site gets a typed `ApiError`, never a raw parsed body.
@@ -263,9 +279,10 @@ is the durable, repeatable coverage.
   A real cost (two places to update), not an oversight; setting up
   sharing is a bigger decision than this page of types justifies on
   its own.
-- No design system / component library - plain CSS
-  (`src/index.css`). Deliberately minimal given the scope of what's
-  built so far (auth, project list, one board view).
+- No design system / component library yet, and the current visuals
+  are still intentionally plain - CSS Modules (Oct 12) is the styling
+  *architecture* for the upcoming visual pass, not the visual pass
+  itself.
 - `BoardPage`'s `<h1>` reads the generic "Board," not the actual
   project's name - no `GET /projects/:id` (single-project fetch)
   endpoint exists yet on the server to get it from (only `GET

@@ -1,0 +1,196 @@
+.boardPage {
+  padding: 1rem;
+  max-width: 100%;
+}
+
+.boardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.boardHeaderTitle {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.boardHeaderTitle h1 {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.newIssueForm {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.boardError {
+  background: #fdecec;
+  border: 1px solid var(--danger);
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+}
+
+.boardEmpty {
+  color: var(--text-muted);
+  padding: 2rem 0;
+  text-align: center;
+}
+
+.membersPanel {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.membersPanel h2 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  margin: 0 0 0.5rem;
+}
+
+.membersList {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.memberRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.memberEmail {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.inviteForm {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.inviteForm label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* Phase 6/SRC-01..03: search + filter panel. Plain fieldsets of
+   checkboxes rather than a custom multi-select widget - native
+   controls are keyboard- and screen-reader-operable for free, which
+   matters directly for the Oct 8 accessibility pass. */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.filtersSearch {
+  flex: 1 1 14rem;
+  min-width: 10rem;
+}
+
+.filterGroup {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 8rem;
+}
+
+.filterGroup legend {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 0;
+  margin-bottom: 0.15rem;
+}
+
+.filterCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  font-weight: normal;
+}
+
+.filtersClear {
+  align-self: flex-end;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.boardColumns {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  padding-bottom: 1rem;
+}
+
+/* Sep 21: responsive pass. Below this width there isn't room for
+   several ~16rem columns side by side plus a peek of the next one, so
+   the layout switches to "one column (mostly) at a time, swipe
+   sideways" - a standard mobile Kanban pattern. scroll-snap-type here
+   pairs with Column.module.css's scroll-snap-align on each column. */
+@media (max-width: 640px) {
+  .boardHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .newIssueForm,
+  .inviteForm {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .boardColumns {
+    scroll-snap-type: x mandatory;
+  }
+
+  .filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* .filtersSearch's `flex: 1 1 14rem` sizes along whichever axis is
+     "main" for its flex container - that's width in the default row
+     layout, but once .filters switches to column above, the exact
+     same rule would size its *height* to 14rem instead, ballooning
+     the search box. Pin it back to a normal single-line input. */
+  .filtersSearch {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  .filtersClear {
+    align-self: stretch;
+  }
+}

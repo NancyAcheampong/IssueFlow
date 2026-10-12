@@ -6,6 +6,7 @@ import {
 import { STATUS_LABELS } from "../lib/types";
 import type { Issue, IssueStatus } from "../lib/types";
 import { Card } from "./Card";
+import styles from "./Column.module.css";
 
 interface ColumnProps {
   status: IssueStatus;
@@ -20,16 +21,16 @@ export function Column({ status, issues, onMoveToColumn }: ColumnProps) {
   const { setNodeRef } = useDroppable({ id: status });
 
   return (
-    <section className="column" data-column-status={status}>
+    <section className={styles.column} data-column-status={status}>
       <h2>
         {STATUS_LABELS[status]}{" "}
-        <span className="column-count">{issues.length}</span>
+        <span className={styles.columnCount}>{issues.length}</span>
       </h2>
       <SortableContext
         items={issues.map((issue) => issue.id)}
         strategy={verticalListSortingStrategy}
       >
-        <ul ref={setNodeRef} className="column-list">
+        <ul ref={setNodeRef} className={styles.columnList}>
           {issues.map((issue) => (
             <Card
               key={issue.id}

@@ -2,6 +2,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ISSUE_STATUSES, STATUS_LABELS } from "../lib/types";
 import type { Issue, IssueStatus } from "../lib/types";
+import styles from "./Card.module.css";
 
 interface CardProps {
   issue: Issue;
@@ -36,17 +37,17 @@ export function Card({ issue, onMoveToColumn }: CardProps) {
     <li
       ref={setNodeRef}
       style={style}
-      className="card"
+      className={styles.card}
       {...attributes}
       {...listeners}
     >
-      <p className="card-title">
+      <p className={styles.cardTitle}>
         #{issue.number} {issue.title}
       </p>
       {issue.description && (
-        <p className="card-description">{issue.description}</p>
+        <p className={styles.cardDescription}>{issue.description}</p>
       )}
-      <label className="card-move">
+      <label className={styles.cardMove}>
         Move to
         <select
           aria-label={`Move issue #${issue.number} to a different column`}

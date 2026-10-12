@@ -1,0 +1,21 @@
+/* Shared by LoginPage and SignupPage - same page shell and form layout,
+   so it lives in one module both import rather than being duplicated
+   or forced into a component that doesn't otherwise exist. */
+
+.authPage {
+  max-width: 28rem;
+  margin: 3rem auto;
+  padding: 0 1rem;
+}
+
+.authPage form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.fieldError {
+  display: block;
+  color: var(--danger);
+  font-size: 0.85rem;
+}
