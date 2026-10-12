@@ -49,17 +49,55 @@ export const updateIssueSchema = z
 
 export type UpdateIssueInput = z.infer<typeof updateIssueSchema>;
 
-// ISS-07: pagination on the issue list. Query params arrive as strings
-// (Express doesn't coerce), so this coerces and bounds them - a
-// pageSize above 100 is clamped rather than rejected outright, since a
-// caller asking for "everything" isn't a malformed request, just one
-// we cap for our own protection.
+// ISS-07/SRC-01..03: pagination, keyword search, and filters on the
+// issue list - all composable with each other in one query, not
+// separate endpoints. Query params arrive as strings (Express doesn't
+// coerce), so each piece here is responsible for its own parsing.
+//
+// SRC-02/SRC-03 ("combine filters: AND across, OR within"): `status`,
+// `assigneeId`, and `labelId` each accept a comma-separated list - an
+// issue matches if it matches *any* value within one param (OR), and
+// the service layer ANDs the different params together. `commaList`
+// is the shared piece of that: split on commas, trim, drop empties,
+// require at least one survivor if the param was given at all.
+function commaList<T extends z.ZodTypeAny>(valueSchema: T) {
+  return z
+    .string()
+    .transform((raw) => raw.split(",").map((v) => v.trim()).filter(Boolean))
+    .pipe(z.array(valueSchema).min(1, "At least one value is required."));
+}
+
+// Shared across the paginated issue list (below) and the board
+// endpoint (board.schemas.ts) - the same search/filter semantics
+// apply to both surfaces (D-26), only pagination differs.
+const issueFilterFields = {
+  // SRC-01: case-insensitive substring match against title OR
+  // description (see buildIssueWhere) - not a full-text/ranked search
+  // engine, which the spec doesn't ask for at this scale.
+  search: z.string().trim().min(1, "Search term cannot be empty.").max(200).optional(),
+  status: commaList(z.enum(issueStatusValues)).optional(),
+  // assigneeId/labelId aren't validated against real members/labels
+  // here - an id that doesn't match anything simply filters down to
+  // zero results, the same as searching for a word nobody used. No
+  // information is leaked either way (this list is already scoped to
+  // one project by the route/getProjectMembership before this schema
+  // ever runs).
+  assigneeId: commaList(z.string().trim().min(1)).optional(),
+  labelId: commaList(z.string().trim().min(1)).optional(),
+};
+
 export const listIssuesQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional().default(1),
   pageSize: z.coerce.number().int().min(1).max(100).optional().default(25),
+  ...issueFilterFields,
 });
 
 export type ListIssuesQuery = z.infer<typeof listIssuesQuerySchema>;
+
+// Same filters, no pagination - the board shows every matching card,
+// grouped by column, not a page of them.
+export const issueFilterQuerySchema = z.object(issueFilterFields);
+export type IssueFilterQuery = z.infer<typeof issueFilterQuerySchema>;
 
 // Phase 4/D-19: moves a card - optionally into a different status
 // column, and/or to a new position within its (destination) column.

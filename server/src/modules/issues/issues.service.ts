@@ -5,6 +5,7 @@ import { rankBetween } from "../../lib/rank.js";
 import { broadcastProjectChange } from "../../realtime/socket.js";
 import type {
   CreateIssueInput,
+  IssueFilterQuery,
   ListIssuesQuery,
   MoveIssueInput,
   UpdateIssueInput,
@@ -241,21 +242,59 @@ export async function moveIssue(issueId: string, projectId: string, input: MoveI
   return moved;
 }
 
-// ISS-07: per-project listing, ordered by issue number, offset-paginated.
-// Keyword search and filters are still Phase 6 (SRC-*) - not here yet.
+// SRC-01/02/03: the single place that turns a parsed query into a
+// Prisma `where` - shared by both surfaces that list issues with
+// search/filters (the paginated list, below, and the board endpoint,
+// board.service.ts), so there's exactly one implementation of
+// "AND across, OR within" to keep correct. Every key set here lives
+// at the top level of the returned object, which Prisma implicitly
+// ANDs together - so `status`, `assigneeId`, `labels`, and the search
+// `OR` block (itself an OR *within* that one clause, not across the
+// whole filter) all combine with AND, exactly the "AND across, OR
+// within" rule SRC-03 asks for. `projectId` is always present and
+// never caller-supplied - this is what keeps every filtered/searched
+// result project-scoped no matter what else is in the query.
+export function buildIssueWhere(projectId: string, query: IssueFilterQuery): Prisma.IssueWhereInput {
+  const where: Prisma.IssueWhereInput = { projectId };
+
+  if (query.search) {
+    where.OR = [
+      { title: { contains: query.search, mode: "insensitive" } },
+      { description: { contains: query.search, mode: "insensitive" } },
+    ];
+  }
+
+  if (query.status) {
+    where.status = { in: query.status };
+  }
+
+  if (query.assigneeId) {
+    where.assigneeId = { in: query.assigneeId };
+  }
+
+  if (query.labelId) {
+    where.labels = { some: { labelId: { in: query.labelId } } };
+  }
+
+  return where;
+}
+
+// ISS-07/SRC-01..03: per-project listing, ordered by issue number,
+// offset-paginated, with an optional keyword search and filters.
 // Two queries (count + page) rather than one - simplest correct thing,
 // and this table has nowhere near the volume where that split matters.
 export async function listIssuesForProject(projectId: string, query: ListIssuesQuery) {
   const { page, pageSize } = query;
+  const where = buildIssueWhere(projectId, query);
 
   const [issues, total] = await Promise.all([
     prisma.issue.findMany({
-      where: { projectId },
+      where,
       orderBy: { number: "asc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
-    prisma.issue.count({ where: { projectId } }),
+    prisma.issue.count({ where }),
   ]);
 
   return {

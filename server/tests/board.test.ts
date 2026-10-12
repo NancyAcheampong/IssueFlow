@@ -115,4 +115,24 @@ describe("GET /api/v1/projects/:projectId/board", () => {
     const response = await request(app).get(`/api/v1/projects/${projectId}/board`);
     expect(response.status).toBe(401);
   });
+
+  it("applies search/filters to the board too, still grouped by column (SRC-01..03/D-26)", async () => {
+    const response = await request(app)
+      .get(`/api/v1/projects/${projectId}/board?search=Todo`)
+      .set("Authorization", `Bearer ${memberToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.board.BACKLOG).toEqual([]);
+    expect(response.body.board.TODO.map((i: { title: string }) => i.title)).toEqual(["Todo 1"]);
+  });
+
+  it("filters the board by status, reusing the same buildIssueWhere as the list endpoint", async () => {
+    const response = await request(app)
+      .get(`/api/v1/projects/${projectId}/board?status=TODO`)
+      .set("Authorization", `Bearer ${memberToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.board.BACKLOG).toEqual([]);
+    expect(response.body.board.TODO).toHaveLength(1);
+  });
 });

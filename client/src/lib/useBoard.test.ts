@@ -222,4 +222,38 @@ describe("useBoard", () => {
 
     expect(socket.close).toHaveBeenCalled();
   });
+
+  it("passes filters through to getBoard", async () => {
+    const initialBoard = makeBoard({});
+    vi.mocked(getBoard).mockResolvedValue({ board: initialBoard });
+
+    const filters = { search: "login", status: ["TODO" as const] };
+    renderHook(() => useBoard("token", "p1", filters));
+
+    await waitFor(() =>
+      expect(getBoard).toHaveBeenCalledWith("token", "p1", filters),
+    );
+  });
+
+  it("refetches when the filters actually change, not on every render", async () => {
+    const initialBoard = makeBoard({});
+    vi.mocked(getBoard).mockResolvedValue({ board: initialBoard });
+
+    const { rerender } = renderHook(
+      ({ filters }: { filters: { search?: string } }) => useBoard("token", "p1", filters),
+      { initialProps: { filters: { search: "login" } } },
+    );
+    await waitFor(() => expect(getBoard).toHaveBeenCalledTimes(1));
+
+    // A *new object*, same content - should NOT refetch (this is the
+    // whole reason useBoard keys off a stringified filters, not the
+    // object reference).
+    rerender({ filters: { search: "login" } });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(getBoard).toHaveBeenCalledTimes(1);
+
+    // Actually different content - should refetch.
+    rerender({ filters: { search: "dark mode" } });
+    await waitFor(() => expect(getBoard).toHaveBeenCalledTimes(2));
+  });
 });

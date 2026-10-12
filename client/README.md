@@ -114,6 +114,27 @@ in this file): one logged-in account created an issue and a
 browser context, saw the new card appear with zero `page.reload()`
 calls anywhere in the script - see DECISIONS.md D-24.
 
+## Search & filters (Phase 6, Sep 30-Oct 3)
+
+`BoardPage` owns the filter state (search text, selected statuses,
+assignees, labels) and passes it to `useBoard`, which keys its fetch
+effect off a *stringified* version of that state rather than the
+object reference - a fresh `{}` every render (which filter state
+inevitably is) would otherwise refetch on every render regardless of
+whether anything actually changed. The search box is debounced 300ms
+(`BoardPage.tsx`) so a fast typist doesn't fire a request per
+keystroke, almost all of which would be thrown away before they even
+resolved - verified live by counting actual network requests during
+simulated fast typing (0 fired mid-burst, exactly 1 once typing
+settles). Status/assignee/label filters are plain checkbox groups, not
+a custom multi-select widget - native controls are keyboard- and
+screen-reader-operable with zero extra work, which matters directly
+for the Oct 8 accessibility pass.
+
+`src/lib/endpoints.ts`'s `listLabels`/`listMembers` populate the
+assignee/label checkboxes (the latter needed a new server endpoint,
+`GET /projects/:id/members` - see server/README.md PRJ-02b).
+
 ## Tests
 
 ```bash
@@ -134,7 +155,20 @@ correct pre-move `version` is sent for optimistic concurrency; a
 `connect` event joins the project's room and reloads the board; a
 `project:changed` event reloads the board regardless of its `type`
 (D-25 - the hook deliberately never branches on it); the socket closes
-on unmount.
+on unmount; filters pass through to `getBoard` unchanged; a *new
+object* with identical filter content does NOT trigger a refetch, but
+actually different content does (the stringify-as-dependency-key
+design, proven directly rather than just asserted).
+
+Beyond the committed suite, the Oct 3 filter UI was verified live
+(same one-off Playwright reasoning as every other live verification in
+this file): seeded data with a known label and a known status, search
+"login" narrows the board from 3 cards to 1, the "To do" status
+checkbox and the "bug" label checkbox each narrow it the same way,
+"Clear filters" restores all 3 - and, specifically for the debounce,
+counting actual `/board` network requests while simulating fast typing
+confirmed 0 requests fired mid-keystroke-burst and exactly 1 once
+typing settles.
 
 Beyond the committed suite, the full flow (signup through drag-and-drop,
 the keyboard move control, and rollback on a forced 409) was verified

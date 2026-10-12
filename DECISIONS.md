@@ -562,4 +562,40 @@ different code path, for every event type.
 
 ---
 
-_Last updated: Phase 5 batch, Sep 23-29 (WebSocket auth + rooms through broadcast-then-refetch — see git log for the day-by-day breakdown)._
+## D-26 (local) — Search & filters: one endpoint, query params, AND-across/OR-within
+
+**Decision:** keyword search and all three filters (status, assignee,
+label) live on the existing `GET /projects/:projectId/issues` endpoint
+as query params - `?search=`, `?status=`, `?assigneeId=`, `?labelId=` -
+not separate endpoints, and compose freely with pagination (ISS-07) in
+the same request. `status`/`assigneeId`/`labelId` each accept a
+comma-separated list of values: an issue matches a given param if it
+matches *any* value in that param's list (OR within), and the
+different params are ANDed together (`status=TODO&assigneeId=X` means
+status matches AND assignee matches). `search` does a case-insensitive
+substring match against title OR description (itself an OR, but one
+clause within the overall AND).
+
+**Why:** this is exactly what the route's own comment already said it
+would become ("Search/list" in the spec's reference table, written back
+in Phase 2) - a plain GET with query params is the natural shape for
+"list, optionally narrowed," and keeping it one endpoint means
+pagination, search, and filters all just work together without a
+combinatorial explosion of endpoint variants. AND-across/OR-within is
+the specific semantics SRC-03 names, and it's also the one almost every
+real issue tracker uses (GitHub's own issue search works the same way:
+`label:bug label:p1` narrows further, while the UI's own multi-select
+widens).
+
+**Implementation note:** `buildIssueWhere` (issues.service.ts) is the
+one place a parsed query becomes a Prisma `where` - every filter key
+sits at the top level of that object alongside `projectId`, which
+Prisma implicitly ANDs; the search clause is its own `OR: [...]` block,
+itself just one of those top-level ANDed keys. `projectId` is never
+caller-supplied, so no combination of search/filter params can ever
+cross a project boundary - proven directly in `tests/issues-search.test.ts`
+with a second project holding a deliberately identically-titled issue.
+
+---
+
+_Last updated: Phase 6 batch, Sep 30-Oct 2 (keyword search through combine-filters — see git log for the day-by-day breakdown)._

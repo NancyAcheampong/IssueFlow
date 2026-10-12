@@ -1,5 +1,5 @@
 import { apiRequest } from "./api";
-import type { Board, Issue, IssueStatus, Project, SafeUser } from "./types";
+import type { Board, Issue, IssueFilters, IssueStatus, Label, Project, SafeUser } from "./types";
 
 export function signup(email: string, displayName: string, password: string) {
   return apiRequest<{ user: SafeUser }>("/auth/signup", {
@@ -35,10 +35,36 @@ export function createProject(
   });
 }
 
-export function getBoard(token: string, projectId: string) {
-  return apiRequest<{ board: Board }>(`/projects/${projectId}/board`, {
-    token,
-  });
+// SRC-01..03/D-26: one function that knows how to turn filter state
+// into the query string both GET .../board and (were a list view ever
+// added) GET .../issues expect - comma-joined for the multi-value
+// fields, omitted entirely when empty rather than sent as "".
+function filtersToQueryString(filters?: IssueFilters): string {
+  if (!filters) {
+    return "";
+  }
+  const params = new URLSearchParams();
+  if (filters.search) {
+    params.set("search", filters.search);
+  }
+  if (filters.status && filters.status.length > 0) {
+    params.set("status", filters.status.join(","));
+  }
+  if (filters.assigneeId && filters.assigneeId.length > 0) {
+    params.set("assigneeId", filters.assigneeId.join(","));
+  }
+  if (filters.labelId && filters.labelId.length > 0) {
+    params.set("labelId", filters.labelId.join(","));
+  }
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
+export function getBoard(token: string, projectId: string, filters?: IssueFilters) {
+  return apiRequest<{ board: Board }>(
+    `/projects/${projectId}/board${filtersToQueryString(filters)}`,
+    { token },
+  );
 }
 
 export interface MoveIssueInput {
@@ -65,5 +91,18 @@ export function createIssue(token: string, projectId: string, title: string) {
     method: "POST",
     token,
     body: { title },
+  });
+}
+
+// Phase 6: populates the status/assignee/label filter controls.
+export function listLabels(token: string, projectId: string) {
+  return apiRequest<{ labels: Label[] }>(`/projects/${projectId}/labels`, {
+    token,
+  });
+}
+
+export function listMembers(token: string, projectId: string) {
+  return apiRequest<{ members: SafeUser[] }>(`/projects/${projectId}/members`, {
+    token,
   });
 }

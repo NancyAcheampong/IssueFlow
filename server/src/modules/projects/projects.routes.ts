@@ -7,6 +7,7 @@ import {
   addMember,
   createProject,
   getProjectMembership,
+  listMembers,
   listProjectsForUser,
   removeMember,
   requireOwnerRole,
@@ -68,6 +69,28 @@ projectsRouter.post(
     const input = addMemberSchema.parse(req.body);
     const member = await addMember(project.id, input.email);
     res.status(201).json({ member });
+  }),
+);
+
+// GET /api/v1/projects/:projectId/members - PRJ-02b. Member-level
+// (not owner-only, unlike adding/removing a member) - any member can
+// see the roster, used by the assignee filter/picker.
+projectsRouter.get(
+  "/:projectId/members",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (!req.userId) {
+      throw AppError.unauthorized();
+    }
+    const { projectId } = req.params;
+    if (!projectId) {
+      throw AppError.badRequest("A project ID is required.");
+    }
+
+    await getProjectMembership(projectId, req.userId);
+
+    const members = await listMembers(projectId);
+    res.status(200).json({ members });
   }),
 );
 

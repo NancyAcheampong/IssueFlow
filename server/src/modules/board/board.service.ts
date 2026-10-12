@@ -1,5 +1,7 @@
 import { prisma } from "../../lib/prisma.js";
 import { issueStatusValues } from "../issues/issues.schemas.js";
+import { buildIssueWhere } from "../issues/issues.service.js";
+import type { IssueFilterQuery } from "../issues/issues.schemas.js";
 
 // A board is just every issue in a project, grouped by its status
 // column and ordered within each column by its BoardPlacement's rank -
@@ -14,9 +16,15 @@ import { issueStatusValues } from "../issues/issues.schemas.js";
 // database's collation is `C.UTF-8` - see D-19 - but doing the compare
 // in JS means correctness never depends on which Postgres this ends up
 // running against.)
-export async function getBoardForProject(projectId: string) {
+//
+// SRC-01..03/D-26: `query` is the same search/filter shape the
+// paginated issue list takes, run through the exact same
+// `buildIssueWhere` - a card that's filtered out of the board is
+// filtered out the identical way it would be filtered out of the
+// list, not by a second, possibly-diverging implementation.
+export async function getBoardForProject(projectId: string, query: IssueFilterQuery) {
   const issues = await prisma.issue.findMany({
-    where: { projectId },
+    where: buildIssueWhere(projectId, query),
     include: { boardPlacement: true },
   });
 

@@ -59,3 +59,21 @@ export interface Issue {
 }
 
 export type Board = Record<IssueStatus, Issue[]>;
+
+export interface Label {
+  id: string;
+  projectId: string;
+  name: string;
+  color: string;
+  createdAt: string;
+}
+
+// SRC-01..03: the same shape GET .../board and GET .../issues both
+// take as query params (D-26) - one filter state, two endpoints that
+// accept it.
+export interface IssueFilters {
+  search?: string;
+  status?: IssueStatus[];
+  assigneeId?: string[];
+  labelId?: string[];
+}

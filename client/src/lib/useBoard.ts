@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError } from "./api";
 import { getBoard, moveIssue } from "./endpoints";
 import { computeMove, replaceIssueInBoard } from "./boardLogic";
 import { connectRealtimeSocket } from "./realtime";
-import type { Board, IssueStatus } from "./types";
+import type { Board, IssueFilters, IssueStatus } from "./types";
 
 interface UseBoardResult {
   board: Board | null;
@@ -22,11 +22,21 @@ interface UseBoardResult {
 // keyboard-accessible "move to column" control funnel through - same
 // optimistic-update-then-rollback behavior regardless of which
 // triggered it.
-export function useBoard(token: string, projectId: string): UseBoardResult {
+//
+// `filters` (Phase 6/SRC-01..03): the caller (BoardPage) owns the
+// filter *state* (what's typed in the search box, which checkboxes
+// are on) - this hook only needs a stable key to know when that state
+// has actually changed, since a fresh `filters` object every render
+// would otherwise refire the fetch effect every render regardless of
+// whether anything in it changed. JSON.stringify is enough here: this
+// object is always plain strings/arrays of strings, nothing where
+// stringify's quirks (key order, Dates, etc.) could bite.
+export function useBoard(token: string, projectId: string, filters?: IssueFilters): UseBoardResult {
   const [board, setBoard] = useState<Board | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const filtersKey = useMemo(() => JSON.stringify(filters ?? {}), [filters]);
 
   const reload = useCallback(() => setReloadToken((n) => n + 1), []);
 
@@ -34,7 +44,7 @@ export function useBoard(token: string, projectId: string): UseBoardResult {
     let cancelled = false;
     setLoading(true);
 
-    getBoard(token, projectId)
+    getBoard(token, projectId, filters)
       .then(({ board: fetched }) => {
         if (!cancelled) {
           setBoard(fetched);
@@ -57,7 +67,10 @@ export function useBoard(token: string, projectId: string): UseBoardResult {
     return () => {
       cancelled = true;
     };
-  }, [token, projectId, reloadToken]);
+    // filtersKey (not filters) is the real dependency - see the
+    // comment above the function.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, projectId, reloadToken, filtersKey]);
 
   // Phase 5/D-25: the live-update channel is deliberately dumb - it
   // only ever says "something in this project changed," never carries

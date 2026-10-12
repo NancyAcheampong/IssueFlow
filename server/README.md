@@ -43,10 +43,11 @@ Error responses always use one envelope shape (spec API-03):
 | POST   | `/api/v1/projects`                            | **Authenticated** | PRJ-01. Creator becomes owner + first member (two rows written atomically — see DECISIONS.md D-11).                                                                                                                                                                                                              |
 | GET    | `/api/v1/projects`                            | **Authenticated** | PRJ-02. Only projects the requester belongs to.                                                                                                                                                                                                                                                                  |
 | POST   | `/api/v1/projects/:projectId/members`         | **Owner only**    | PRJ-03. Non-member → 404; member-but-not-owner → 403 (see DECISIONS.md D-06).                                                                                                                                                                                                                                    |
+| GET    | `/api/v1/projects/:projectId/members`         | **Member**        | PRJ-02b. Added for the Phase 6 assignee filter/picker — member-level (unlike add/remove), since the roster isn't sensitive to someone already on the project.                                                                                                                                                  |
 | DELETE | `/api/v1/projects/:projectId/members/:userId` | **Owner only**    | PRJ-04. Owner can't remove themselves (400); removing a non-member is 404.                                                                                                                                                                                                                                       |
 | PATCH  | `/api/v1/projects/:projectId`                 | **Owner only**    | PRJ-05. Partial update of name/description; empty string clears description; empty patch is rejected.                                                                                                                                                                                                            |
 | POST   | `/api/v1/projects/:projectId/issues`          | **Member**        | ISS-01. Any project member (not owner-only). Creates the `Issue` + its `BoardPlacement` together; assignee must be a current project member (ASN-02).                                                                                                                                                            |
-| GET    | `/api/v1/projects/:projectId/issues`          | **Member**        | ISS-07. Ordered by issue number, offset-paginated (`?page=&pageSize=`, defaults 1/25, `pageSize` capped at 100). Response includes a `pagination` object. Keyword search/filters are still Phase 6.                                                                                                              |
+| GET    | `/api/v1/projects/:projectId/issues`          | **Member**        | ISS-07/SRC-01..03. Ordered by issue number, offset-paginated (`?page=&pageSize=`, defaults 1/25, `pageSize` capped at 100). `?search=` is a case-insensitive title/description substring match; `?status=`, `?assigneeId=`, `?labelId=` each take a comma-separated list (OR within one param, AND across different params — D-26). Response includes a `pagination` object whose `total` reflects the filtered count. |
 | GET    | `/api/v1/issues/:issueId`                     | **Member**        | ISS-03. Not nested under `/projects` — authorization looks the issue up first, then checks membership in _its_ project (D-06 applies the same way).                                                                                                                                                              |
 | PATCH  | `/api/v1/issues/:issueId`                     | **Member**        | ISS-04. Partial update of title/description/assignee (member-level, not owner-only). Empty string clears description; `null` unassigns; reassigning re-validates project membership (ASN-02); empty patch is rejected. Status transitions and labels are out of scope — see DECISIONS.md D-13.                   |
 | POST   | `/api/v1/issues/:issueId/close`               | **Member**        | ISS-05. Sets status to `DONE`. Idempotent — closing an already-closed issue is a 200 no-op. See DECISIONS.md D-14.                                                                                                                                                                                               |
@@ -277,7 +278,10 @@ Current coverage:
   rank after the last one in their column"); a card created straight
   into TODO proves columns rank independently of each other; each
   card's `boardPlacement` (rank, version) comes through; D-06 and 401
-  covered.
+  covered. Phase 6: search and a status filter both narrow the board
+  while keeping it grouped by column - proof the board endpoint
+  actually reuses `buildIssueWhere`, not a second, possibly-diverging
+  implementation.
 - Move card (D-20, `tests/issues.test.ts`): reordering within a column
   actually changes the board's returned order (verified via the board
   endpoint, not just the move response); moving to a different column
@@ -297,6 +301,21 @@ Current coverage:
   on a socket that joined that project's room — and, just as
   important, does *not* arrive on a socket that never joined, proving
   `join` is a real authorization gate and not decoration.
+- `tests/issues-search.test.ts` — keyword search and filters (SRC-01..03)
+  through the real HTTP app, against seeded data chosen specifically
+  to prove both accuracy and project-scoping (a *second* project with
+  a same-titled issue is the whole point of several tests here).
+  Search: a title match and a description match are both found,
+  case-insensitively; project-scoped (the other project's identically-
+  titled issue never appears); no matches is a 200 with an empty list,
+  not a 404; an empty search term is rejected. Filters: a single
+  status, multiple statuses OR'd together within one param, an invalid
+  status rejected; assignee; a single label and multiple labels OR'd
+  together; different params AND'd together (status that matches AND
+  assignee that matches); the specific "no shared issue" case proving
+  that AND, not OR, governs across params; search combined with a
+  filter; `pagination.total` reflects the *filtered* count, not the
+  whole project's. D-06 holds even with search/filter params present.
 - `tests/projects.test.ts` — the whole projects surface through the real
   HTTP app, with genuinely separate user accounts throughout: create
   confirms a real `ProjectMembership` row (not just the response shape);
@@ -311,6 +330,11 @@ Current coverage:
   update project covers a partial patch leaving the untouched field
   alone, an empty string genuinely clearing the description, an
   entirely empty patch being rejected, and the same owner-only check
+  as everywhere else in this module; list members (PRJ-02b, added
+  Phase 6 for the assignee filter) confirms every member including the
+  owner comes back with no `passwordHash` leaking through, and that
+  it's member-level, not owner-only - a non-owner member can list the
+  roster too, unlike add/remove.
 
 ## Database migrations
 

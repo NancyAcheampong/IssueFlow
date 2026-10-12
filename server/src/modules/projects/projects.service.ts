@@ -63,6 +63,21 @@ export function requireOwnerRole(membership: { role: string }): void {
   }
 }
 
+// PRJ-02b (added Phase 6, for the assignee filter/picker - SRC-02):
+// any member can see who else is on the project. Member-level, not
+// owner-only - unlike adding/removing a member (a structural change),
+// seeing the membership list isn't sensitive within a project you're
+// already in.
+export async function listMembers(projectId: string): Promise<SafeUser[]> {
+  const memberships = await prisma.projectMembership.findMany({
+    where: { projectId },
+    include: { user: true },
+    orderBy: { joinedAt: "asc" },
+  });
+
+  return memberships.map((membership) => toSafeUser(membership.user));
+}
+
 // PRJ-03: add an existing registered user as a member, identified by
 // email (the identifier a project owner realistically has on hand for
 // a colleague - not an internal user id).

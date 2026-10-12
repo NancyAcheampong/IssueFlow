@@ -232,6 +232,79 @@ describe("POST /api/v1/projects/:projectId/members", () => {
   });
 });
 
+describe("GET /api/v1/projects/:projectId/members", () => {
+  const app = createApp();
+  const runId = Date.now();
+  const ownerEmail = `list-members-owner-${runId}@example.com`;
+  const memberEmail = `list-members-target-${runId}@example.com`;
+  const outsiderEmail = `list-members-outsider-${runId}@example.com`;
+  let ownerToken: string;
+  let outsiderToken: string;
+  let projectId: string;
+
+  beforeAll(async () => {
+    const owner = await signupAndLogin(app, ownerEmail, "List Members Owner");
+    ownerToken = owner.token;
+    await signupAndLogin(app, memberEmail, "List Members Target");
+    const outsider = await signupAndLogin(app, outsiderEmail, "List Members Outsider");
+    outsiderToken = outsider.token;
+
+    const project = await request(app)
+      .post("/api/v1/projects")
+      .set("Authorization", `Bearer ${ownerToken}`)
+      .send({ name: "List Members Test Project" });
+    projectId = project.body.project.id;
+
+    await request(app)
+      .post(`/api/v1/projects/${projectId}/members`)
+      .set("Authorization", `Bearer ${ownerToken}`)
+      .send({ email: memberEmail });
+  });
+
+  afterAll(async () => {
+    const emails = [ownerEmail, memberEmail, outsiderEmail];
+    await prisma.project.deleteMany({ where: { owner: { email: { in: emails } } } });
+    await prisma.user.deleteMany({ where: { email: { in: emails } } });
+    await prisma.$disconnect();
+  });
+
+  it("lists every member, including the owner, with no password hash (PRJ-02b)", async () => {
+    const response = await request(app)
+      .get(`/api/v1/projects/${projectId}/members`)
+      .set("Authorization", `Bearer ${ownerToken}`);
+
+    expect(response.status).toBe(200);
+    const emails = (response.body.members as { email: string }[]).map((m) => m.email);
+    expect(emails.sort()).toEqual([memberEmail, ownerEmail].sort());
+    expect(response.body.members[0]).not.toHaveProperty("passwordHash");
+  });
+
+  it("is member-level, not owner-only - a non-owner member can list the roster too", async () => {
+    const memberLogin = await request(app)
+      .post("/api/v1/auth/login")
+      .send({ email: memberEmail, password: TEST_PASSWORD });
+
+    const response = await request(app)
+      .get(`/api/v1/projects/${projectId}/members`)
+      .set("Authorization", `Bearer ${memberLogin.body.token}`);
+
+    expect(response.status).toBe(200);
+  });
+
+  it("returns 404 for someone with no membership at all (D-06)", async () => {
+    const response = await request(app)
+      .get(`/api/v1/projects/${projectId}/members`)
+      .set("Authorization", `Bearer ${outsiderToken}`);
+
+    expect(response.status).toBe(404);
+  });
+
+  it("requires authentication", async () => {
+    const response = await request(app).get(`/api/v1/projects/${projectId}/members`);
+    expect(response.status).toBe(401);
+  });
+});
+
 describe("DELETE /api/v1/projects/:projectId/members/:userId", () => {
   const app = createApp();
   const runId = Date.now();
