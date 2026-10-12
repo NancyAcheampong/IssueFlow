@@ -492,4 +492,74 @@ reverted *and* surfaced an error banner, not just one or the other).
 
 ---
 
-_Last updated: Phase 4 batch, Sep 17-19 (frontend scaffold, drag-and-drop, rollback, keyboard-accessible move — see git log for the day-by-day breakdown)._
+## D-24 (local) — Realtime transport: Socket.IO, attached to the same HTTP server
+
+**Decision:** the real-time layer is Socket.IO (`socket.io` server,
+`socket.io-client` on the frontend), attached to the exact same
+`http.Server` Express already listens on (`attachRealtime(server)` in
+`src/index.ts`) - one process, one port, not a second server to deploy
+and monitor separately. Auth happens at the handshake, via
+`socket.handshake.auth.token` verified the same way `requireAuth`
+verifies a REST bearer token (`verifyAccessToken`, same JWT, same
+secret) - a socket that doesn't present a valid token never finishes
+connecting at all, the same "authenticate before anything else
+happens" posture as the REST middleware.
+
+**Why:** Socket.IO over raw `ws` or Server-Sent Events - reconnection
+(with backoff), rooms, and an auth-at-handshake hook all come built
+in, instead of being hand-rolled. This project has consistently chosen
+the boring, well-trodden library over a custom implementation at every
+prior turn (bcrypt over a hand-rolled hash, jsonwebtoken over a hand-
+rolled signer, zod over hand-written validation, fractional-indexing
+over a hand-rolled rank algorithm) - this is the same call applied to
+WebSockets. SSE was also considered and rejected: it's one-directional
+(server to client only), and this project needs the client to tell the
+server which project's room to join.
+
+**Verified live**, not just via the committed suite: a two-separate-
+browser-context Playwright session (one-off, not committed, same
+reasoning as every other live verification in this document) had one
+account create an issue and confirmed a *different* account, logged in
+separately, watching the same board, saw the new card appear with zero
+`page.reload()` calls anywhere in the script - the literal wording of
+the Phase 5 exit gate ("two open browser sessions see each other's
+changes without a manual refresh").
+
+## D-25 (local) — Broadcast-then-refetch, not broadcast-the-payload
+
+**Decision:** every real-time event is `project:changed`, carrying
+only `{ type: "issue" | "comment" | "label" }` - never the changed
+record itself. The client's reaction to *any* `project:changed` event
+is the same: call the exact same `reload()`/refetch function that
+already exists for the "Add issue" button and every other client-
+initiated change. Reconnection uses the identical path - Socket.IO's
+`connect` event (fired on the initial connection *and* every automatic
+reconnect) re-joins the project's room and reloads, so "handle
+reconnects" (Sep 28) is not a separate code path from "see a live
+update" (Sep 25/26); a reconnect is just one more reason to refetch.
+
+**Why:** a second channel that also describes "what does an issue/
+board look like" is a second place that description can drift from the
+REST response shape it's supposed to match - exactly the same reasoning
+D-16 already applied to comment threading (flat storage, let the client
+derive structure) and D-12 applied to board ranking (don't let a
+schema/transport decision pre-decide something a different layer
+should own). Keeping the socket channel "dumb" (pure invalidation
+signal) means the REST endpoints stay the *only* source of truth for
+response shape, full stop. The cost is an extra round-trip per change
+instead of the socket carrying the new data directly - a deliberate
+trade given this project's board/issue payloads are small and the
+simplicity/correctness win is worth more than saving one fetch.
+
+**Rejected:** broadcasting the actual changed record (the created
+issue, the new comment) and having the client merge it into local
+state directly. Faster (no extra round-trip), but doubles the number of
+places that need to agree on "what does an Issue look like in JSON" -
+the REST response shape and the socket payload shape - and reopens
+every authorization question REST already answers (can this socket
+even see this particular record's full detail?) a second time, in a
+different code path, for every event type.
+
+---
+
+_Last updated: Phase 5 batch, Sep 23-29 (WebSocket auth + rooms through broadcast-then-refetch — see git log for the day-by-day breakdown)._

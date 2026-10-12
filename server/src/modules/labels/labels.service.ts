@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../lib/AppError.js";
+import { broadcastProjectChange } from "../../realtime/socket.js";
 import type { CreateLabelInput } from "./labels.schemas.js";
 
 // LBL-01: any project member can create a label - collaborative
@@ -71,15 +72,18 @@ export async function attachLabelToIssue(issueId: string, projectId: string, lab
     throw err;
   }
 
+  broadcastProjectChange(projectId, "label");
   return listLabelsForIssue(issueId);
 }
 
-export async function detachLabelFromIssue(issueId: string, labelId: string): Promise<void> {
+export async function detachLabelFromIssue(issueId: string, projectId: string, labelId: string): Promise<void> {
   const result = await prisma.issueLabel.deleteMany({ where: { issueId, labelId } });
 
   if (result.count === 0) {
     throw AppError.notFound("That label is not attached to this issue.");
   }
+
+  broadcastProjectChange(projectId, "label");
 }
 
 export async function listLabelsForIssue(issueId: string) {

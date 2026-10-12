@@ -132,9 +132,9 @@ issueLabelsRouter.delete(
       throw AppError.badRequest("An issue ID and label ID are required.");
     }
 
-    await getIssueById(issueId, req.userId);
+    const issue = await getIssueById(issueId, req.userId);
 
-    await detachLabelFromIssue(issueId, labelId);
+    await detachLabelFromIssue(issueId, issue.projectId, labelId);
     res.status(204).send();
   }),
 );

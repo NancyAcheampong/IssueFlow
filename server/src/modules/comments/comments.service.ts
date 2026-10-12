@@ -1,6 +1,7 @@
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../lib/AppError.js";
 import { renderMarkdownToSafeHtml } from "../../lib/markdown.js";
+import { broadcastProjectChange } from "../../realtime/socket.js";
 import type { CreateCommentInput } from "./comments.schemas.js";
 
 // MEN-01: no username field exists on User (see DECISIONS.md D-17) -
@@ -81,7 +82,7 @@ export async function createComment(
   const bodyHtml = renderMarkdownToSafeHtml(input.bodyMarkdown);
   const mentionedUserIds = await resolveMentions(projectId, input.bodyMarkdown);
 
-  return prisma.comment.create({
+  const comment = await prisma.comment.create({
     data: {
       issueId,
       authorId,
@@ -94,6 +95,9 @@ export async function createComment(
     },
     include: { mentions: true },
   });
+
+  broadcastProjectChange(projectId, "comment");
+  return comment;
 }
 
 // Flat list, oldest first - the client threads replies under their

@@ -4,12 +4,18 @@ import { env } from "./config/env.js";
 import { logger } from "./lib/logger.js";
 import { closeDatabasePool } from "./lib/db.js";
 import { disconnectPrisma } from "./lib/prisma.js";
+import { attachRealtime } from "./realtime/socket.js";
 
 const app = createApp();
 
 const server = app.listen(env.PORT, () => {
   logger.info(`IssueFlow API listening on port ${env.PORT} (${env.NODE_ENV})`);
 });
+
+// Phase 5/D-24: one HTTP server, one port - Socket.IO attaches to the
+// same `server` Express is already listening on rather than standing
+// up a second server/port to deploy and monitor separately.
+attachRealtime(server);
 
 // Close the HTTP server and the database connection cleanly on shutdown,
 // instead of dropping in-flight requests and leaked connections. This is

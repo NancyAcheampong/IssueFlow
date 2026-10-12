@@ -69,7 +69,11 @@ dev`) and its `ALLOWED_ORIGIN` to include this app's origin
   function; both drag-and-drop and the keyboard-accessible "Move to"
   control funnel through it. Optimistic update + rollback-on-failure
   (D-23) lives here, tested directly (mocked API, not mocked logic) in
-  `src/lib/useBoard.test.ts`.
+  `src/lib/useBoard.test.ts`. Also owns the realtime connection (Phase
+  5) - see below.
+- `src/lib/realtime.ts` - the one function that knows how to open a
+  Socket.IO connection to the server (D-24), mirroring `endpoints.ts`
+  being the one place that knows the REST URL shapes.
 - `src/components/Column.tsx` / `Card.tsx` - the board UI. Each card is
   both draggable (pointer or keyboard, via @dnd-kit) and carries an
   explicit "Move to" `<select>` - two ways to trigger the exact same
@@ -89,6 +93,27 @@ viewport size). Verified live with a throwaway Playwright script
 (same "not committed, not otherwise part of this toolchain" reasoning
 as the Sep 17-19 verification above) at 375px, 768px, and 1280px.
 
+## Realtime (Phase 5, Sep 23-29)
+
+`useBoard` opens a Socket.IO connection (`src/lib/realtime.ts`) on
+mount, authenticated with the same JWT as every REST call, and joins
+the current project's room. The channel is deliberately "dumb" (D-25,
+see `server/README.md`): every event is just "something changed, go
+refetch," handled by calling the exact same `reload()` function the
+"Add issue" button already uses - there's no second code path that
+also has to know how to merge a partial update into local state.
+Socket.IO's own `connect` event (fired on the initial connection *and*
+every automatic reconnect) re-joins the room and reloads, which is
+also what satisfies "handle reconnects, re-fetch state" - a reconnect
+is just another reason this same code runs, not a separate feature.
+
+Verified live with a two-separate-browser-context Playwright session
+(same one-off, not-committed reasoning as the other live verifications
+in this file): one logged-in account created an issue and a
+*different* logged-in account, watching the same board in its own
+browser context, saw the new card appear with zero `page.reload()`
+calls anywhere in the script - see DECISIONS.md D-24.
+
 ## Tests
 
 ```bash
@@ -100,12 +125,16 @@ Current coverage: `boardLogic.test.ts` (11 tests) proves the pure move
 math - correct neighbor computation, same-column reorder without
 duplicating/losing a card, out-of-range index clamping, and the
 off-by-one that excluding the dragged card from index calculation
-exists specifically to avoid. `useBoard.test.ts` (3 tests) proves the
-hook's actual behavior against a mocked API: a successful move
-reconciles with the server's response (including the new `version`,
-which the *next* move depends on); a rejected move rolls back to the
-exact pre-move board and surfaces an error; the correct pre-move
-`version` is sent for optimistic concurrency.
+exists specifically to avoid. `useBoard.test.ts` (6 tests) proves the
+hook's actual behavior against a mocked API and a mocked socket: a
+successful move reconciles with the server's response (including the
+new `version`, which the *next* move depends on); a rejected move
+rolls back to the exact pre-move board and surfaces an error; the
+correct pre-move `version` is sent for optimistic concurrency; a
+`connect` event joins the project's room and reloads the board; a
+`project:changed` event reloads the board regardless of its `type`
+(D-25 - the hook deliberately never branches on it); the socket closes
+on unmount.
 
 Beyond the committed suite, the full flow (signup through drag-and-drop,
 the keyboard move control, and rollback on a forced 409) was verified

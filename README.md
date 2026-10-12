@@ -17,18 +17,21 @@ client/   React + Vite + TypeScript frontend (D-21)
 
 ## Status
 
-**Phase 4 (Kanban board) complete, backend and frontend.** The whole
-pipeline works end to end: sign up, log in, create a project, create
-issues, see them on a real Kanban board, and move them between columns
-either by dragging a card or via an explicit keyboard-accessible "Move
-to" control (D-22) — both paths share one move operation with
-optimistic updates and rollback on failure (D-23), backed by the
-server's fractional-indexed ranking and atomic status+position moves
-(D-19/D-20). Verified by 139 backend tests, 14 frontend tests, and a
-full live browser session (signup through drag-and-drop, the keyboard
-control, and a forced-failure rollback) against a running server.
+**Phase 5 (real-time layer) complete.** Everything through Phase 4
+(auth, projects, issues, comments, labels, Kanban board with drag-and-
+drop and a keyboard-accessible move control) now updates live: a
+Socket.IO connection (authenticated with the same JWT as the REST API)
+joins each open project's room, and any write there — a new issue, a
+moved card, a new comment, a label change — broadcasts a plain
+invalidation signal that every other connected client reacts to by
+refetching (D-24/D-25), including on reconnect. Verified by 146 backend
+tests (7 of them a real two-way Socket.IO integration test, not
+mocked), 17 frontend tests, and a two-separate-browser-context live
+session confirming one account's change appeared on a different
+account's open board with zero manual refreshes — the literal wording
+of the Phase 5 exit gate.
 
-Phase 5 (real-time layer) is next, per the original roadmap.
+Phase 6 (search & filters) is next, per the original roadmap.
 
 See `server/README.md` and `client/README.md` for how to run each
 piece locally, and [`DECISIONS.md`](./DECISIONS.md) for the technical

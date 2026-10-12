@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../lib/AppError.js";
 import { rankBetween } from "../../lib/rank.js";
+import { broadcastProjectChange } from "../../realtime/socket.js";
 import type {
   CreateIssueInput,
   ListIssuesQuery,
@@ -59,7 +60,7 @@ export async function createIssue(projectId: string, authorId: string, input: Cr
   });
   const rank = rankBetween(lastInColumn?.rank, null);
 
-  return prisma.issue.create({
+  const issue = await prisma.issue.create({
     data: {
       projectId,
       number,
@@ -74,6 +75,11 @@ export async function createIssue(projectId: string, authorId: string, input: Cr
     },
     include: { boardPlacement: true },
   });
+
+  // Phase 5/D-25: broadcast only after the write has actually
+  // committed, never speculatively.
+  broadcastProjectChange(projectId, "issue");
+  return issue;
 }
 
 // ISS-03: any project member can view an issue's full detail. This
@@ -128,11 +134,14 @@ export async function updateIssue(issueId: string, projectId: string, input: Upd
       input.assigneeId === null ? { disconnect: true } : { connect: { id: input.assigneeId } };
   }
 
-  return prisma.issue.update({
+  const issue = await prisma.issue.update({
     where: { id: issueId },
     data,
     include: { boardPlacement: true },
   });
+
+  broadcastProjectChange(projectId, "issue");
+  return issue;
 }
 
 // ISS-05: close/reopen as their own dedicated actions rather than a
@@ -142,24 +151,30 @@ export async function updateIssue(issueId: string, projectId: string, input: Upd
 // already-open one is a no-op 200, not an error, matching how GitHub's
 // own close/reopen behave. "Closed" is modeled as status DONE; there's
 // no separate boolean column - see D-14.
-export async function closeIssue(issueId: string) {
-  return prisma.issue.update({
+export async function closeIssue(issueId: string, projectId: string) {
+  const issue = await prisma.issue.update({
     where: { id: issueId },
     data: { status: "DONE" },
     include: { boardPlacement: true },
   });
+
+  broadcastProjectChange(projectId, "issue");
+  return issue;
 }
 
 // Reopens to BACKLOG, not whatever status the issue held before it was
 // closed - the schema doesn't record prior status (there's no history
 // table for it), and BACKLOG is the correct "needs triage again" state
 // for a reopened issue. See D-14.
-export async function reopenIssue(issueId: string) {
-  return prisma.issue.update({
+export async function reopenIssue(issueId: string, projectId: string) {
+  const issue = await prisma.issue.update({
     where: { id: issueId },
     data: { status: "BACKLOG" },
     include: { boardPlacement: true },
   });
+
+  broadcastProjectChange(projectId, "issue");
+  return issue;
 }
 
 // Phase 4/D-19/D-20: a neighbor card referenced in a move request must
@@ -200,7 +215,7 @@ export async function moveIssue(issueId: string, projectId: string, input: MoveI
 
   const rank = rankBetween(prevPlacement?.rank, nextPlacement?.rank);
 
-  return prisma.$transaction(async (tx) => {
+  const moved = await prisma.$transaction(async (tx) => {
     if (input.status) {
       await tx.issue.update({ where: { id: issueId }, data: { status: input.status } });
     }
@@ -219,6 +234,11 @@ export async function moveIssue(issueId: string, projectId: string, input: MoveI
       include: { boardPlacement: true },
     });
   });
+
+  // Only reached if the transaction actually committed - a conflict
+  // throws before this line, so a rejected move never broadcasts.
+  broadcastProjectChange(projectId, "issue");
+  return moved;
 }
 
 // ISS-07: per-project listing, ordered by issue number, offset-paginated.

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiError } from "./api";
 import { getBoard, moveIssue } from "./endpoints";
 import { computeMove, replaceIssueInBoard } from "./boardLogic";
+import { connectRealtimeSocket } from "./realtime";
 import type { Board, IssueStatus } from "./types";
 
 interface UseBoardResult {
@@ -57,6 +58,40 @@ export function useBoard(token: string, projectId: string): UseBoardResult {
       cancelled = true;
     };
   }, [token, projectId, reloadToken]);
+
+  // Phase 5/D-25: the live-update channel is deliberately dumb - it
+  // only ever says "something in this project changed," never carries
+  // a payload - so the reaction to it is just `reload()`, the exact
+  // same function the "Add issue" button's `reload()` call already
+  // uses. One socket per mount, joining this project's room; `reload`
+  // is excluded from the dependency array on purpose (it's a stable
+  // `useCallback` that never actually changes) so this effect only
+  // re-runs when the connection itself needs to change (token or
+  // project). `connect` (Socket.IO's own event, fired on the initial
+  // connection *and* every automatic reconnect) re-joins the room and
+  // reloads the board - this is what satisfies "handle reconnects,
+  // re-fetch state" (Sep 28): a reconnect is just another reason to
+  // refetch, not a separate code path.
+  useEffect(() => {
+    if (!token || !projectId) {
+      return;
+    }
+
+    const socket = connectRealtimeSocket(token);
+
+    socket.on("connect", () => {
+      socket.emit("join", projectId);
+      reload();
+    });
+    socket.on("project:changed", () => {
+      reload();
+    });
+
+    return () => {
+      socket.close();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, projectId]);
 
   const moveCard = useCallback(
     async (

@@ -64,6 +64,22 @@ Error responses always use one envelope shape (spec API-03):
 
 Full reference contract lives in the product spec, §8.
 
+## Realtime (Socket.IO)
+
+Attached to the same HTTP server/port as the REST API (`src/realtime/socket.ts`,
+wired in from `src/index.ts` — not from `createApp()`, so the test
+suite's Supertest-only `createApp()` calls never start a real socket
+server). See DECISIONS.md D-24/D-25.
+
+| Direction       | Event            | Payload                       | Notes                                                                                                               |
+| --------------- | ---------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| Client → Server | _(handshake)_    | `auth: { token }`              | Same JWT as the REST `Authorization` header. An invalid/missing token rejects the connection outright.               |
+| Client → Server | `join`           | `projectId: string`            | Joins that project's room — only if the socket's user is actually a member (D-06 applied to realtime). |
+| Server → Client | `join:ok`        | `{ projectId }`                | Join succeeded.                                                                                                        |
+| Server → Client | `join:error`     | `{ message }`                  | Not a member (or a malformed/missing project id) — same non-leakage as a REST 404.                                     |
+| Client → Server | `leave`          | `projectId: string`            | Leaves the room.                                                                                                       |
+| Server → Client | `project:changed`| `{ type: "issue" \| "comment" \| "label" }` | Broadcast to everyone in the project's room after a write commits. Carries no record data on purpose — D-25. |
+
 ## Local setup
 
 Requires Node.js 20+ and Docker (for local Postgres).
@@ -270,6 +286,17 @@ Current coverage:
   rejected move leaves status completely untouched even when the
   request also asked to change it; a neighbor card from a different
   project is a 400; D-06 and 401 covered.
+- `tests/realtime.test.ts` — the Socket.IO layer, against a *real*
+  listening HTTP server (not `createApp()` via Supertest alone — see
+  the comment at the top of the file for why that distinction matters
+  here specifically). A connection with no token, and one with an
+  invalid token, are both rejected at the handshake; a valid token
+  connects; a member can join their project's room, a non-member
+  cannot (D-06 applied to the realtime channel); creating a real issue
+  via a normal REST call causes `project:changed` to actually arrive
+  on a socket that joined that project's room — and, just as
+  important, does *not* arrive on a socket that never joined, proving
+  `join` is a real authorization gate and not decoration.
 - `tests/projects.test.ts` — the whole projects surface through the real
   HTTP app, with genuinely separate user accounts throughout: create
   confirms a real `ProjectMembership` row (not just the response shape);

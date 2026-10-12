@@ -133,9 +133,9 @@ issueRouter.post(
       throw AppError.badRequest("An issue ID is required.");
     }
 
-    await getIssueById(issueId, req.userId);
-    const issue = await closeIssue(issueId);
-    res.status(200).json({ issue });
+    const issue = await getIssueById(issueId, req.userId);
+    const closed = await closeIssue(issueId, issue.projectId);
+    res.status(200).json({ issue: closed });
   }),
 );
 
@@ -153,9 +153,9 @@ issueRouter.post(
       throw AppError.badRequest("An issue ID is required.");
     }
 
-    await getIssueById(issueId, req.userId);
-    const issue = await reopenIssue(issueId);
-    res.status(200).json({ issue });
+    const issue = await getIssueById(issueId, req.userId);
+    const reopened = await reopenIssue(issueId, issue.projectId);
+    res.status(200).json({ issue: reopened });
   }),
 );
 
