@@ -190,6 +190,17 @@ localhost:5432`.** Different from every error above — this one
   from this by re-checking/re-creating everything idempotently, but
   if it keeps recurring, figure out which single Postgres you actually
   want and stop the others.
+- **`Error: Cannot find module '.../bcrypt/lib/binding/napi-v3/bcrypt_lib.node'`
+  (`MODULE_NOT_FOUND`), only on some machines.** This means you ran
+  `pnpm install` instead of `npm install`. `bcrypt` ships a native
+  addon that has to be compiled on install via a `postinstall`
+  script; pnpm (v9/v10+) blocks native postinstall scripts by default
+  as a security measure, so the binding never gets built and the
+  module is missing at require-time. This repo's install path is
+  tested against npm — easiest fix is `rm -rf node_modules
+  pnpm-lock.yaml && npm install`. To keep using pnpm instead, run
+  `pnpm approve-builds`, approve `bcrypt` when prompted, then
+  `pnpm rebuild bcrypt`.
 
 ## Environment variables
 
