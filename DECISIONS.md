@@ -663,4 +663,54 @@ already established this codebase doesn't accept for board moves.
 
 ---
 
-_Last updated: Phase 7 batch, Oct 6-7 (security review through fill-in-missing-tests — see git log for the day-by-day breakdown)._
+## D-29 (local) — Accessibility pass (Oct 8): a real live-caught bug, not just a checklist
+
+**Decision:** every page now sets `document.title` on mount
+(`usePageTitle`, Oct 8) - React Router doesn't do this itself, and a
+screen reader announces the document title after a route change, so
+every page past the first was previously silently announced as just
+"IssueFlow" forever. `BoardPage` gained the `<h1>` it never had (every
+page needs exactly one). `SignupPage`'s field-level errors were
+restructured from implicit `<label>Text<input/><span/></label>`
+wrapping to explicit `<label htmlFor>`/`<input id>` pairs with the
+error `<span>` as a sibling, associated only via `aria-describedby`.
+
+**Why the restructure specifically:** nesting the error `<span>`
+*inside* the `<label>` made its text part of the input's accessible
+**name** (everything inside a label-wrapped input's label contributes
+to the name), not just its description - found live, not by reasoning
+about it in advance: a Playwright script written to verify the fix
+couldn't resolve the password field by `getByLabel("Password")`
+anymore once an error was showing, because the field's real accessible
+name had become "Password Password must be at least 8 characters."
+That's not just a test-tooling inconvenience - a screen reader user
+would hear the *exact same thing*, every time the field is focused,
+for as long as the error is showing. `aria-describedby` is the correct
+mechanism for "here's more context about this field," read on demand,
+not baked permanently into the name.
+
+**Also found live, same pass:** `.filters-search`'s `flex: 1 1 14rem`
+sizes along whichever axis is "main" for its flex container - row
+(width) at desktop widths, but once `.filters` switches to
+`flex-direction: column` under the ≤640px breakpoint (D- responsive,
+Sep 21), the exact same rule sized the search box's *height* to 14rem
+instead, ballooning it into a nearly-empty tall box. Fixed with an
+explicit override inside that same media query. Neither of these two
+bugs would have been caught by only reading the code - both needed an
+actual browser.
+
+**Process note, not a product decision:** while verifying the
+`SignupPage` fix, discovered `vitest.config.ts`'s `globals: false`
+means `@testing-library/react`'s automatic cleanup-between-tests (which
+hooks into a *global* `afterEach`) never registers - every `render()`
+across every test in a file was stacking into the same `jsdom`
+document instead of unmounting, invisible until a test actually
+queried via `screen` (hook-level tests using `renderHook` never
+surfaced it, since they read their own returned `result.current`
+rather than querying the shared document). Fixed once, centrally, in
+`setupTests.ts` - every future component-render test is protected,
+not just the one that found it.
+
+---
+
+_Last updated: Phase 7 batch, Oct 6-8 (security review through accessibility — see git log for the day-by-day breakdown)._

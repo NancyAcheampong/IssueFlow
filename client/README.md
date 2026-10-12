@@ -93,6 +93,26 @@ viewport size). Verified live with a throwaway Playwright script
 (same "not committed, not otherwise part of this toolchain" reasoning
 as the Sep 17-19 verification above) at 375px, 768px, and 1280px.
 
+## Accessibility (Oct 8 — D-29)
+
+`src/lib/usePageTitle.ts` sets `document.title` on every page
+(`LoginPage`, `SignupPage`, `ProjectsPage`, `BoardPage`) - React Router
+doesn't do this on its own, and a screen reader announces the document
+title after navigating, so every page past the first was previously
+silently announced as just "IssueFlow." `BoardPage` gained the `<h1>`
+it never had. `SignupPage`'s field errors use explicit
+`<label htmlFor>`/`<input id>` pairs with the error as a sibling
+`<span>`, associated only via `aria-describedby`/`aria-invalid` - not
+nested inside the `<label>`, which would make the error text part of
+the input's accessible *name* rather than its description (a real bug
+caught live - see D-29 for what that actually looked like, and
+`src/pages/SignupPage.test.tsx` for the regression test that locks the
+fix in). The same live-verification pass also caught a responsive
+regression: `.filters-search`'s `flex: 1 1 14rem` sized the search
+box's *height* instead of its width once the mobile breakpoint
+switched `.filters` to a column layout - fixed in the same media
+query.
+
 ## Realtime (Phase 5, Sep 23-29)
 
 `useBoard` opens a Socket.IO connection (`src/lib/realtime.ts`) on
@@ -171,6 +191,18 @@ expecting its own token back (AUTH-01 - the server never issues one
 from signup); `logout()` clears both storage and in-memory state;
 `useAuth()` throws outside an `AuthProvider`.
 
+`src/pages/SignupPage.test.tsx` (3 tests, added Oct 8 as a direct
+regression test for the D-29 accessible-name bug): the password
+field's accessible name stays exactly "Password" even while a field
+error is showing (this is the test that would fail if the error span
+were nested back inside the `<label>`); `aria-invalid`/`aria-describedby`
+resolve to the actual error element's text once a field error exists;
+neither attribute is present before any submission. Needed adding
+`afterEach(cleanup)` to `setupTests.ts` to get here - `globals: false`
+meant Testing Library's own automatic cleanup between tests had never
+been registering, invisible until a `screen`-querying test (this was
+the first one) actually needed it.
+
 Beyond the committed suite, the Oct 3 filter UI was verified live
 (same one-off Playwright reasoning as every other live verification in
 this file): seeded data with a known label and a known status, search
@@ -203,3 +235,17 @@ is the durable, repeatable coverage.
 - No design system / component library - plain CSS
   (`src/index.css`). Deliberately minimal given the scope of what's
   built so far (auth, project list, one board view).
+- `BoardPage`'s `<h1>` reads the generic "Board," not the actual
+  project's name - no `GET /projects/:id` (single-project fetch)
+  endpoint exists yet on the server to get it from (only `GET
+  /projects`, the list). Added the `<h1>` itself Oct 8 because every
+  page needs one regardless; making it say the real project name is a
+  real, separate, small backend-plus-frontend task, not done here to
+  avoid scope-creeping an accessibility pass into new API surface.
+- No `aria-live` announcement when the realtime channel (Phase 5)
+  changes the board out from under a screen reader user - a card
+  appearing/moving via a live update is currently silent to anyone not
+  looking at the screen. Deliberately not bolted on here: over-
+  announcing live updates is its own real failure mode (a noisy board
+  with several people active becomes unusable), and getting this right
+  is a deliberate design decision, not a quick addition.

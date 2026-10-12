@@ -83,6 +83,17 @@ button {
   margin-bottom: 1rem;
 }
 
+.board-header-title {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.board-header-title h1 {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
 .new-issue-form {
   display: flex;
   gap: 0.5rem;
@@ -254,6 +265,16 @@ button {
   .filters {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  /* .filters-search's `flex: 1 1 14rem` sizes along whichever axis is
+     "main" for its flex container - that's width in the default row
+     layout, but once .filters switches to column above, the exact
+     same rule would size its *height* to 14rem instead, ballooning
+     the search box. Pin it back to a normal single-line input. */
+  .filters-search {
+    flex: 0 0 auto;
+    min-width: 0;
   }
 
   .filters-clear {

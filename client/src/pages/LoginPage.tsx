@@ -2,8 +2,10 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
+import { usePageTitle } from "../lib/usePageTitle";
 
 export function LoginPage() {
+  usePageTitle("Log in");
   const { login } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");

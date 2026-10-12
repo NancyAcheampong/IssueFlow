@@ -11,6 +11,7 @@ import type { DragEndEvent } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useAuth } from "../lib/AuthContext";
 import { useBoard } from "../lib/useBoard";
+import { usePageTitle } from "../lib/usePageTitle";
 import { resolveDropTarget } from "../lib/boardLogic";
 import { ISSUE_STATUSES, STATUS_LABELS } from "../lib/types";
 import type { IssueFilters, IssueStatus, Label, SafeUser } from "../lib/types";
@@ -27,6 +28,7 @@ function toggleValue<T>(list: T[], value: T): T[] {
 }
 
 export function BoardPage() {
+  usePageTitle("Board");
   const { projectId } = useParams<{ projectId: string }>();
   const { token } = useAuth();
   const [newTitle, setNewTitle] = useState("");
@@ -137,7 +139,17 @@ export function BoardPage() {
   return (
     <div className="board-page">
       <header className="board-header">
-        <Link to="/projects">&larr; Projects</Link>
+        <div className="board-header-title">
+          <Link to="/projects">&larr; Projects</Link>
+          {/* Oct 8 accessibility pass: every page needs exactly one
+              <h1> - this one was missing it entirely. The project's
+              own name isn't fetched anywhere in the client yet (no
+              GET /projects/:id endpoint exists to fetch a single
+              project by id), so this is deliberately generic for now
+              rather than a half-correct guess - see client/README.md
+              Known gaps for the follow-up. */}
+          <h1>Board</h1>
+        </div>
         <form
           className="new-issue-form"
           onSubmit={(event) => {

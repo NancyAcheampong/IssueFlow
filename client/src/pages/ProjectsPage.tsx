@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
+import { usePageTitle } from "../lib/usePageTitle";
 import { createProject, listProjects } from "../lib/endpoints";
 import type { Project } from "../lib/types";
 
 export function ProjectsPage() {
+  usePageTitle("Projects");
   const { token, user, logout } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);

@@ -2,8 +2,10 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
+import { usePageTitle } from "../lib/usePageTitle";
 
 export function SignupPage() {
+  usePageTitle("Sign up");
   const { signup } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
@@ -37,41 +39,53 @@ export function SignupPage() {
     <main className="auth-page">
       <h1>Sign up</h1>
       <form onSubmit={handleSubmit}>
-        <label>
-          Display name
-          <input
-            value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
-            required
-          />
-          {fieldErrors.displayName && (
-            <span className="field-error">{fieldErrors.displayName}</span>
-          )}
-        </label>
-        <label>
-          Email
-          <input
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            required
-          />
-          {fieldErrors.email && (
-            <span className="field-error">{fieldErrors.email}</span>
-          )}
-        </label>
-        <label>
-          Password
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
-          {fieldErrors.password && (
-            <span className="field-error">{fieldErrors.password}</span>
-          )}
-        </label>
+        <label htmlFor="displayName">Display name</label>
+        <input
+          id="displayName"
+          value={displayName}
+          onChange={(event) => setDisplayName(event.target.value)}
+          required
+          aria-invalid={Boolean(fieldErrors.displayName)}
+          aria-describedby={fieldErrors.displayName ? "displayName-error" : undefined}
+        />
+        {fieldErrors.displayName && (
+          <span className="field-error" id="displayName-error" role="alert">
+            {fieldErrors.displayName}
+          </span>
+        )}
+
+        <label htmlFor="email">Email</label>
+        <input
+          id="email"
+          type="email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          required
+          aria-invalid={Boolean(fieldErrors.email)}
+          aria-describedby={fieldErrors.email ? "email-error" : undefined}
+        />
+        {fieldErrors.email && (
+          <span className="field-error" id="email-error" role="alert">
+            {fieldErrors.email}
+          </span>
+        )}
+
+        <label htmlFor="password">Password</label>
+        <input
+          id="password"
+          type="password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          required
+          aria-invalid={Boolean(fieldErrors.password)}
+          aria-describedby={fieldErrors.password ? "password-error" : undefined}
+        />
+        {fieldErrors.password && (
+          <span className="field-error" id="password-error" role="alert">
+            {fieldErrors.password}
+          </span>
+        )}
+
         {error && <p role="alert">{error}</p>}
         <button type="submit" disabled={submitting}>
           Sign up
