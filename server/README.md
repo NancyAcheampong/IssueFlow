@@ -37,8 +37,8 @@ Error responses always use one envelope shape (spec API-03):
 | ------ | --------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | GET    | `/health`                                     | Public            | Liveness only, no dependencies checked                                                                                                                                                                                                                                                                           |
 | GET    | `/api/v1/status`                              | Public            | Readiness — also checks the database                                                                                                                                                                                                                                                                             |
-| POST   | `/api/v1/auth/signup`                         | Public            | AUTH-01. Does **not** issue a JWT — signup and login are deliberately separate steps; call login next.                                                                                                                                                                                                           |
-| POST   | `/api/v1/auth/login`                          | Public            | AUTH-02. Verifies credentials, returns `{ user, token }`. Wrong password and unknown email return the identical error (AUTH-07 — no account enumeration).                                                                                                                                                        |
+| POST   | `/api/v1/auth/signup`                         | Public            | AUTH-01. Does **not** issue a JWT — signup and login are deliberately separate steps; call login next. Rate-limited (20/15min per IP — D-27).                                                                                                                                                                    |
+| POST   | `/api/v1/auth/login`                          | Public            | AUTH-02. Verifies credentials, returns `{ user, token }`. Wrong password and unknown email return the identical error (AUTH-07 — no account enumeration). Rate-limited (20/15min per IP — D-27, resolving D-10's deferred item).                                                                               |
 | GET    | `/api/v1/me`                                  | **Authenticated** | AUTH-04. First protected route — requires `Authorization: Bearer <token>`, via `requireAuth` middleware.                                                                                                                                                                                                         |
 | POST   | `/api/v1/projects`                            | **Authenticated** | PRJ-01. Creator becomes owner + first member (two rows written atomically — see DECISIONS.md D-11).                                                                                                                                                                                                              |
 | GET    | `/api/v1/projects`                            | **Authenticated** | PRJ-02. Only projects the requester belongs to.                                                                                                                                                                                                                                                                  |
@@ -80,6 +80,19 @@ server). See DECISIONS.md D-24/D-25.
 | Server → Client | `join:error`     | `{ message }`                  | Not a member (or a malformed/missing project id) — same non-leakage as a REST 404.                                     |
 | Client → Server | `leave`          | `projectId: string`            | Leaves the room.                                                                                                       |
 | Server → Client | `project:changed`| `{ type: "issue" \| "comment" \| "label" }` | Broadcast to everyone in the project's room after a write commits. Carries no record data on purpose — D-25. |
+
+## Security (Oct 6 review — D-27)
+
+Every route carries `requireAuth` plus the correct scoped
+authorization check (`getProjectMembership` or `getIssueById`,
+depending on whether the route is project- or issue-scoped) — audited
+route by route, not assumed. `/auth/signup` and `/auth/login` are
+rate-limited (`src/middleware/authRateLimit.ts`, 20 requests/15min per
+IP), disabled in the test environment so this suite's own rapid
+signup/login traffic doesn't trip it. CORS (both REST and the Socket.IO
+handshake) is locked to `ALLOWED_ORIGIN`, never a wildcard. Error
+responses never leak a stack trace or internal message in production.
+All ids are `cuid()` — not sequential, not practically guessable.
 
 ## Local setup
 
@@ -206,6 +219,14 @@ Current coverage:
   duplicate signups are rejected with 409, a real JWT comes back on login
   and decodes to the right user, and wrong-password vs. unknown-email
   produce the exact same error (no account enumeration)
+- `tests/authRateLimit.test.ts` — proves the Oct 6/D-27 rate limiter
+  actually enforces its threshold (not just that it's configured):
+  `createAuthRateLimit({ skip: false })` mounted on a throwaway Express
+  app allows exactly 20 requests then 429s the 21st, with the
+  `RATE_LIMITED` error envelope; a separate test confirms the default
+  export (as wired into `/auth/*`) is correctly a no-op in the test
+  environment - 25 requests through it all succeed, which is what
+  keeps the rest of this suite from being flaky.
 - `tests/requireAuth.test.ts` — unit tests for the auth middleware
   directly: no header, wrong scheme, garbage token, expired token, and a
   token signed with the wrong secret are all rejected; a valid token

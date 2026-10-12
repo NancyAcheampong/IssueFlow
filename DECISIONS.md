@@ -106,6 +106,8 @@ dropped — AUTH-07 is P1 ("should"), and rate limiting is an
 infrastructure/hardening concern better done alongside the rest of
 Phase 7's security pass than bolted onto Phase 1 in isolation.
 
+**Resolved:** see D-27 — the Oct 6 security review implemented this.
+
 ## D-11 (local) — ProjectMembership as a composite-key join table
 
 **Decision:** `ProjectMembership` has no independent `id` column — the
@@ -598,4 +600,39 @@ with a second project holding a deliberately identically-titled issue.
 
 ---
 
-_Last updated: Phase 6 batch, Sep 30-Oct 2 (keyword search through combine-filters — see git log for the day-by-day breakdown)._
+## D-27 (local) — Security review (Oct 6): route/socket audit + rate limiting
+
+**Decision:** every one of the 27 route definitions across the API was
+read and confirmed to carry both `requireAuth` and the correct
+authorization check for its scope (`getProjectMembership` for
+project-scoped routes, `getIssueById` for issue-scoped ones, which
+itself checks membership) - no gap found. The one concrete gap this
+review *did* find: signup and login had no rate limiting at all,
+despite D-10 explicitly flagging that as deferred-not-forgotten back
+in Phase 1. Fixed with `express-rate-limit` (20 requests / 15 minutes
+per IP on `/auth/signup` and `/auth/login`), disabled in the test
+environment (`skip: () => env.NODE_ENV === "test"`) since this suite's
+own rapid signup/login traffic would otherwise trip it and produce
+flakiness unrelated to the code under test - `createAuthRateLimit`
+exists specifically so `tests/authRateLimit.test.ts` can mount a real
+copy with that skip forced off and prove the threshold is actually
+enforced (not just configured and never exercised).
+
+**Also checked and confirmed already correct** (not new work, just
+verified rather than assumed): CORS is locked to `allowedOrigins`, not
+a wildcard, on both the REST API and the Socket.IO handshake; no raw
+SQL/`eval`/`exec` anywhere in the codebase; `errorHandler` never leaks
+a stack trace or internal error message to the client in production
+(`NODE_ENV === "production"` gates that, verified by reading the code,
+not just trusting the comment above it); `express.json()`'s default
+100kb body-size cap is in effect (never overridden to something
+unbounded); request logging (`pino-http`, `errorHandler`'s own log
+call) never includes the request body, so a logged request never
+contains a plaintext password; issue/project/comment/label ids are all
+`cuid()` - high-entropy, non-sequential, not practically guessable -
+so there's no ID-enumeration surface distinct from the authorization
+checks already in place.
+
+---
+
+_Last updated: Phase 7 batch, Oct 6 onward (security review — see git log for the day-by-day breakdown)._
